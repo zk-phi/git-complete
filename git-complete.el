@@ -53,6 +53,6 @@
         (kill-line)
         (insert completion)
         (save-excursion (funcall indent-line-function))
-        (insert "\n")))))
+        (when (eobp) (insert "\n"))))))
 
 (provide 'git-complete)
