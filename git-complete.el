@@ -22,8 +22,17 @@
       (match-string 1 str)
     ""))
 
+(defvar-local git-complete--root-dir nil)
+(defun git-complete--root-dir ()
+  (or git-complete--root-dir
+      (setq git-complete--root-dir
+            (cond ((null buffer-file-name) default-directory)
+                  ((locate-dominating-file buffer-file-name ".git"))
+                  (t (error "Not under a git repository."))))))
+
 (defun git-complete--get-candidates (query)
-  (let* ((command (format "git grep -F -h %s" (shell-quote-argument query)))
+  (let* ((default-directory (git-complete--root-dir))
+         (command (format "git grep -F -h %s" (shell-quote-argument query)))
          (lines (split-string (shell-command-to-string command) "\n"))
          (hash (make-hash-table :test 'equal)))
     (while (and lines (cdr lines))
