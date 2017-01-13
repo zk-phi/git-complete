@@ -22,6 +22,61 @@
       (match-string 1 str)
     ""))
 
+;; [newline insertion criteria]
+
+;; 1. writing program from the top
+;;    a. no newlines -> newline required
+;;
+;;       use strict;       use strict;
+;;       use warnings; ->  use warnings;
+;;       utf8|[EOF]        use utf8;
+;;                        |[EOF]
+;;
+;;    b. has newline -> newline prefered
+;;
+;;       use strict;       use strict;
+;;       use warnings; ->  use warnings;
+;;       utf8|             use utf8;
+;;       [EOF]            |
+;;                         [EOF]
+
+;; 2. inserting a newline into the middle of existing lines
+;;    a. no newlines previously
+;;       x. no newlines now -> newline required
+;;
+;;          use strict;            use strict;
+;;          warnings|use utf8; ->  use warnings;
+;;                                |use utf8;
+;;
+;;       y. still has newline -> no newlines prefered
+;;
+;;          use strict;     use strict;
+;;          warnings|   ->  use warnings;
+;;          use utf8;      |use utf8;
+
+;;    b. has newline previously
+;;       x. no newlines now -> newline required (but undistinguishable from 2ay case)
+;;
+;;          use strict;       use strict;
+;;          use warnings; ->  use warnings;
+;;          utf8|             use utf8;
+;;          sub foo {
+;;                           |sub foo {
+;;
+;;       y. still has newline -> no newlines prefered
+;;
+;;          use strict;       use strict
+;;          use warnings; ->  use warnings;
+;;          utf8|             use utf8;
+;;                           |
+;;          sub foo {         sub foo {
+
+(defun git-complete--insert-newline-p ()
+  (save-excursion
+    (or (not (eolp))                    ; not EOL
+        (not (zerop (forward-line -1))) ; EOL but also EOF
+        (eobp))))                       ; next line is EOF
+
 (defvar-local git-complete--root-dir nil)
 (defun git-complete--root-dir ()
   (or git-complete--root-dir
@@ -43,11 +98,6 @@
       (maphash (lambda (k v) (push (cons k v) result)) hash)
       (mapcar 'car (sort result (lambda (a b) (> (cdr a) (cdr b))))))))
 
-(defun git-complete--end-of-block-or-buffer-p ()
-  (save-excursion
-    (end-of-line)
-    (looking-at "[\s\t\n]*\\(?:\\'\\|\\s)\\)")))
-
 (defun git-complete ()
   (interactive)
   (let* ((query (git-complete--trim-spaces (buffer-substring (point-at-bol) (point))))
@@ -58,8 +108,11 @@
         (delete-region (point) (point-at-bol))
         (insert completion)
         (save-excursion (funcall indent-line-function))
-        (when (git-complete--end-of-block-or-buffer-p)
-          (insert "\n")
-          (indent-for-tab-command))))))
+        (cond ((git-complete--insert-newline-p)
+               (insert "\n")
+               (indent-for-tab-command))
+              (t
+               (forward-line 1)
+               (skip-chars-forward "\s\t")))))))
 
 (provide 'git-complete)
