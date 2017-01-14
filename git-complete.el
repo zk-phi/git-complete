@@ -18,64 +18,11 @@
 (require 'popup)
 
 (defun git-complete--trim-spaces (str)
+  "Remove leading/trailing whitespaces from STR. This is a
+non-destructive function."
   (if (string-match "^[\s\t]*\\(.*[^\s\t]\\)[\s\t]*" str)
       (match-string 1 str)
     ""))
-
-;; [newline insertion criteria]
-
-;; 1. writing program from the top
-;;    a. no newlines -> newline required
-;;
-;;       use strict;       use strict;
-;;       use warnings; ->  use warnings;
-;;       utf8|[EOF]        use utf8;
-;;                        |[EOF]
-;;
-;;    b. has newline -> newline prefered
-;;
-;;       use strict;       use strict;
-;;       use warnings; ->  use warnings;
-;;       utf8|             use utf8;
-;;       [EOF]            |
-;;                         [EOF]
-
-;; 2. inserting a newline into the middle of existing lines
-;;    a. no newlines previously
-;;       x. no newlines now -> newline required
-;;
-;;          use strict;            use strict;
-;;          warnings|use utf8; ->  use warnings;
-;;                                |use utf8;
-;;
-;;       y. still has newline -> no newlines prefered
-;;
-;;          use strict;     use strict;
-;;          warnings|   ->  use warnings;
-;;          use utf8;      |use utf8;
-
-;;    b. has newline previously
-;;       x. no newlines now -> newline required (but undistinguishable from 2ay case)
-;;
-;;          use strict;       use strict;
-;;          use warnings; ->  use warnings;
-;;          utf8|             use utf8;
-;;          sub foo {
-;;                           |sub foo {
-;;
-;;       y. still has newline -> no newlines prefered
-;;
-;;          use strict;       use strict
-;;          use warnings; ->  use warnings;
-;;          utf8|             use utf8;
-;;                           |
-;;          sub foo {         sub foo {
-
-(defun git-complete--insert-newline-p ()
-  (save-excursion
-    (or (not (eolp))                    ; not EOL
-        (not (zerop (forward-line -1))) ; EOL but also EOF
-        (eobp))))                       ; next line is EOF
 
 (defvar-local git-complete--root-dir nil)
 (defun git-complete--root-dir ()
@@ -97,6 +44,60 @@
     (let ((result nil))
       (maphash (lambda (k v) (push (cons k v) result)) hash)
       (mapcar 'car (sort result (lambda (a b) (> (cdr a) (cdr b))))))))
+
+(defun git-complete--insert-newline-p ()
+  "Determine whether to insert newline here, after completion.
+
+1. not EOL -> insert newline
+
+   use strict;            use strict;
+   warnings|use utf8; ->  use warnings;
+                         |use utf8;
+
+2. EOF -> insert newline
+
+   use strict;       use strict;
+   use warnings; ->  use warnings;
+   utf8|[EOF]        use utf8;
+                    |[EOF]
+
+3. next line is EOF -> insert newline
+
+   use strict;       use strict;
+   use warnings; ->  use warnings;
+   utf8|             use utf8;
+   [EOF]            |
+                     [EOF]
+
+4. next line is empty -> DO NOT insert newline
+
+   use strict;       use strict
+   use warnings; ->  use warnings;
+   utf8|             use utf8;
+                    |
+   sub foo {         sub foo {
+
+5. next line is not empty
+   a. current line hasn't been empty -> DO NOT insert newline
+
+      use strict;     use strict;     use strict;
+      use utf8;   ->  warnings|   ->  use warnings;
+                      use utf8;      |use utf8;
+
+   b. the line had been empty -> insert newline
+
+      use strict;      use strict;       use strict;
+      use warnings; -> use warnings; ->  use warnings;
+                       utf8|             use utf8;
+      sub foo {        sub foo {        |
+                                         sub foo{
+
+   * since I have no good idea to distinguish these two cases,
+     git-complete never inserts a newline."
+  (save-excursion
+    (or (not (eolp))                    ; not EOL
+        (not (zerop (forward-line -1))) ; EOL but also EOF
+        (eobp))))                       ; next line is EOF
 
 (defun git-complete ()
   (interactive)
