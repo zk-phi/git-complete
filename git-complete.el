@@ -32,15 +32,18 @@ non-destructive function."
                   ((locate-dominating-file buffer-file-name ".git"))
                   (t (error "Not under a git repository."))))))
 
-(defun git-complete--get-candidates (query)
+(defun git-complete--get-candidates (query &optional next-line)
   (let* ((default-directory (git-complete--root-dir))
-         (command (format "git grep -F -h %s" (shell-quote-argument query)))
+         (command (format "git grep -F -h %s %s"
+                          (if next-line "-A1" "")
+                          (shell-quote-argument query)))
          (lines (split-string (shell-command-to-string command) "\n"))
          (hash (make-hash-table :test 'equal)))
     (while (and lines (cdr lines))
-      (unless (string-equal "--" (car lines))
-        (let ((str (git-complete--trim-spaces (pop lines))))
-          (puthash str (1+ (gethash str hash 0)) hash))))
+      (when next-line (pop lines))      ; pop the first line
+      (let ((str (git-complete--trim-spaces (pop lines))))
+        (puthash str (1+ (gethash str hash 0)) hash))
+      (when next-line (pop lines)))     ; pop "--"
     (let ((result nil))
       (maphash (lambda (k v) (push (cons k v) result)) hash)
       (mapcar 'car (sort result (lambda (a b) (> (cdr a) (cdr b))))))))
@@ -99,21 +102,27 @@ non-destructive function."
         (not (zerop (forward-line -1))) ; EOL but also EOF
         (eobp))))                       ; next line is EOF
 
-(defun git-complete ()
+(defun git-complete (&optional force-newline)
   (interactive)
-  (let* ((query (git-complete--trim-spaces (buffer-substring (point-at-bol) (point))))
-         (candidates (and (not (string= query "")) (git-complete--get-candidates query))))
+  (let* ((next-line-p (looking-back "^[\s\t]*"))
+         (query (save-excursion
+                  (when next-line-p (forward-line -1) (end-of-line))
+                  (git-complete--trim-spaces (buffer-substring (point-at-bol) (point)))))
+         (candidates (delete "" (and (not (string= query ""))
+                                     (git-complete--get-candidates query next-line-p)))))
     (if (null candidates)
         (message "No completions found.")
       (let ((completion (popup-menu* candidates :scroll-bar t :isearch t)))
         (delete-region (point) (point-at-bol))
         (insert completion)
         (save-excursion (funcall indent-line-function))
-        (cond ((git-complete--insert-newline-p)
+        (cond ((or force-newline (git-complete--insert-newline-p))
                (insert "\n")
-               (indent-for-tab-command))
+               (indent-for-tab-command)
+               (git-complete))
               (t
                (forward-line 1)
-               (skip-chars-forward "\s\t")))))))
+               (skip-chars-forward "\s\t")
+               (git-complete t)))))))
 
 (provide 'git-complete)
