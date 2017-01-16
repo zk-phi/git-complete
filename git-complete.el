@@ -118,11 +118,10 @@ non-destructive function."
         (save-excursion (funcall indent-line-function))
         (cond ((or force-newline (git-complete--insert-newline-p))
                (insert "\n")
-               (indent-for-tab-command)
-               (git-complete))
+               (indent-for-tab-command))
               (t
                (forward-line 1)
-               (skip-chars-forward "\s\t")
-               (git-complete t)))))))
+               (skip-chars-forward "\s\t")))
+        (git-complete t)))))
 
 (provide 'git-complete)
