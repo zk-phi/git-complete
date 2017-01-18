@@ -17,12 +17,25 @@
 
 (require 'popup)
 
+(defvar git-complete-enable-dwim-newline nil
+  "When non-nil, git-complete tries to guess if you want to a
+newline or not after completion. Otherwise TAB will not insert a
+newline but RET does.")
+
+;; * utilities
+
 (defun git-complete--trim-spaces (str)
   "Remove leading/trailing whitespaces from STR. This is a
 non-destructive function."
   (if (string-match "^[\s\t]*\\(.*[^\s\t]\\)[\s\t]*" str)
       (match-string 1 str)
     ""))
+
+(defvar git-complete--popup-menu-keymap
+  (let ((kmap (copy-keymap popup-menu-keymap)))
+    (define-key kmap (kbd "TAB") 'popup-select)
+    kmap)
+  "Keymap for git-complete popup menu.")
 
 (defvar-local git-complete--root-dir nil)
 (defun git-complete--root-dir ()
@@ -31,6 +44,8 @@ non-destructive function."
             (cond ((null buffer-file-name) default-directory)
                   ((locate-dominating-file buffer-file-name ".git"))
                   (t (error "Not under a git repository."))))))
+
+;; * get candidates via git grep
 
 (defun git-complete--get-candidates (query &optional next-line)
   (let* ((default-directory (git-complete--root-dir))
@@ -47,6 +62,8 @@ non-destructive function."
     (let ((result nil))
       (maphash (lambda (k v) (push (cons k v) result)) hash)
       (mapcar 'car (sort result (lambda (a b) (> (cdr a) (cdr b))))))))
+
+;; * do completion
 
 (defun git-complete--insert-newline-p ()
   "Determine whether to insert newline here, after completion.
@@ -112,16 +129,23 @@ non-destructive function."
                                      (git-complete--get-candidates query next-line-p)))))
     (if (null candidates)
         (message "No completions found.")
-      (let ((completion (popup-menu* candidates :scroll-bar t :isearch t)))
+      (let ((completion (popup-menu* candidates :scroll-bar t :isearch t
+                                     :keymap git-complete--popup-menu-keymap)))
         (delete-region (point) (point-at-bol))
         (insert completion)
         (save-excursion (funcall indent-line-function))
-        (cond ((or force-newline (git-complete--insert-newline-p))
-               (insert "\n")
-               (indent-for-tab-command))
+        (cond ((or force-newline
+                   (not (eolp))
+                   (if git-complete-enable-dwim-newline
+                       (git-complete--insert-newline-p)
+                     (= last-input-event 13))) ; 13 = RET
+               (insert "\n"))
               (t
-               (forward-line 1)
-               (skip-chars-forward "\s\t")))
+               (forward-line 1)))
+        (back-to-indentation)
+        (save-excursion (funcall indent-line-function))
         (git-complete t)))))
+
+;; * provide
 
 (provide 'git-complete)
