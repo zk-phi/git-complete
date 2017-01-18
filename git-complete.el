@@ -119,7 +119,7 @@ non-destructive function."
         (not (zerop (forward-line -1))) ; EOL but also EOF
         (eobp))))                       ; next line is EOF
 
-(defun git-complete (&optional force-newline)
+(defun git-complete ()
   (interactive)
   (let* ((next-line-p (looking-back "^[\s\t]*"))
          (query (save-excursion
@@ -143,8 +143,7 @@ non-destructive function."
               (t
                (forward-line 1)))
         (back-to-indentation)
-        (save-excursion (funcall indent-line-function))
-        (git-complete t)))))
+        (save-excursion (funcall indent-line-function))))))
 
 ;; * provide
 
