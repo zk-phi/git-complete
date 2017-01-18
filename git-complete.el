@@ -134,8 +134,7 @@ non-destructive function."
         (delete-region (point) (point-at-bol))
         (insert completion)
         (save-excursion (funcall indent-line-function))
-        (cond ((or force-newline
-                   (not (eolp))
+        (cond ((or (not (eolp))
                    (if git-complete-enable-dwim-newline
                        (git-complete--insert-newline-p)
                      (= last-input-event 13))) ; 13 = RET
