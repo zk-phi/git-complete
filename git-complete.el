@@ -8,12 +8,14 @@
 ;;
 ;;   ::SHA
 ;;
-;; and `M-x git-completion` completes rest of the line, using `git
-;; grep` as a completion source.
+;; then `M-x git-completion` completes rest of the line, if suitable
+;; one is found in your git repo.
 ;;
 ;;   use Digest::SHA qw/sha1_base64/;
-
-;; (global-set-key (kbd "C-c C-c") 'git-complete)
+;;
+;; You may also bind some keys to the command.
+;;
+;;   (global-set-key (kbd "C-c C-c") 'git-complete)
 
 (require 'popup)
 
