@@ -18,11 +18,24 @@
 ;;   (global-set-key (kbd "C-c C-c") 'git-complete)
 
 (require 'popup)
+(require 'cl-lib)
 
 (defvar git-complete-enable-dwim-newline nil
   "When non-nil, git-complete tries to guess if you want to a
 newline or not after completion. Otherwise TAB will not insert a
 newline but RET does.")
+
+(defvar git-complete-enable-autopair t
+  "When non-nil, close parens are automatically inserted when the
+completed line has unclosed parens.")
+
+(defvar git-complete-lispy-modes
+  '(lisp-mode emacs-lisp-mode scheme-mode
+              lisp-interaction-mode gauche-mode scheme-mode
+              clojure-mode racket-mode egison-mode)
+  "List of lisp-like language modes. Newline is not inserted
+after the point by when `git-complete-enable-autopair', in the
+modes.")
 
 ;; * utilities
 
@@ -41,11 +54,32 @@ non-destructive function."
 
 (defvar-local git-complete--root-dir nil)
 (defun git-complete--root-dir ()
+  "Find the root directory of this git repo. If current directory
+is not under a git repo, raises an error."
   (or git-complete--root-dir
       (setq git-complete--root-dir
             (cond ((null buffer-file-name) default-directory)
                   ((locate-dominating-file buffer-file-name ".git"))
                   (t (error "Not under a git repository."))))))
+
+(defun git-complete--get-unclosed-parens (str)
+  "Parse parens in STR and return a string of unclosed parens."
+  (let ((expected-closes nil) syntax char)
+    (with-temp-buffer
+      (save-excursion (insert str))
+      (while (progn (skip-syntax-forward "^\\\\()") (not (eobp)))
+        (setq char   (char-after)
+              syntax (aref (syntax-table) (char-after)))
+        (cl-case (car syntax)
+          ((4)                          ; open
+           (push (cdr syntax) expected-closes))
+          ((5)                          ; close
+           (when (and expected-closes (= (car expected-closes) char))
+             (pop expected-closes)))
+          ((9)                          ; escape
+           (forward-char 1)))
+        (forward-char 1)))
+    (apply 'string (nreverse expected-closes))))
 
 ;; * get candidates via git grep
 
@@ -132,19 +166,24 @@ non-destructive function."
     (if (null candidates)
         (message "No completions found.")
       (let ((completion (popup-menu* candidates :scroll-bar t :isearch t
-                                     :keymap git-complete--popup-menu-keymap)))
+                                     :keymap git-complete--popup-menu-keymap))
+            close beg end)
         (delete-region (point) (point-at-bol))
+        (setq beg (point))
         (insert completion)
-        (save-excursion (funcall indent-line-function))
-        (cond ((or (not (eolp))
-                   (if git-complete-enable-dwim-newline
-                       (git-complete--insert-newline-p)
-                     (= last-input-event 13))) ; 13 = RET
-               (insert "\n"))
-              (t
-               (forward-line 1)))
-        (back-to-indentation)
-        (save-excursion (funcall indent-line-function))))))
+        (save-excursion
+          (when git-complete-enable-autopair
+            (when (not (string= "" (setq close (git-complete--get-unclosed-parens completion))))
+              (insert "\n" (if (memq major-mode git-complete-lispy-modes) "" "\n") close)))
+          (when (or (not (eolp))
+                    (if git-complete-enable-dwim-newline
+                        (git-complete--insert-newline-p)
+                      (= last-input-event 13))) ; 13 = RET
+            (insert "\n"))
+          (setq end (point)))
+        (indent-region beg end)
+        (forward-line 1)
+        (back-to-indentation)))))
 
 ;; * provide
 
