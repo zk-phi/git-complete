@@ -20,22 +20,32 @@
 (require 'popup)
 (require 'cl-lib)
 
-(defvar git-complete-enable-dwim-newline nil
+(defgroup git-complete nil
+  "Complete lines via git-grep results."
+  :group 'git-complete)
+
+(defcustom git-complete-enable-dwim-newline nil
   "When non-nil, git-complete tries to guess if you want to a
 newline or not after completion. Otherwise TAB will not insert a
-newline but RET does.")
+newline but RET does."
+  :type 'boolean
+  :group 'git-complete)
 
-(defvar git-complete-enable-autopair t
+(defcustom git-complete-enable-autopair t
   "When non-nil, close parens are automatically inserted when the
-completed line has unclosed parens.")
+completed line has unclosed parens."
+  :type 'boolean
+  :group 'git-complete)
 
-(defvar git-complete-lispy-modes
+(defcustom git-complete-lispy-modes
   '(lisp-mode emacs-lisp-mode scheme-mode
               lisp-interaction-mode gauche-mode scheme-mode
               clojure-mode racket-mode egison-mode)
   "List of lisp-like language modes. Newline is not inserted
 after the point by when `git-complete-enable-autopair', in the
-modes.")
+modes."
+  :type '(list symbol)
+  :group 'git-complete)
 
 ;; * utilities
 
