@@ -23,7 +23,7 @@
   "Complete lines via git-grep results."
   :group 'git-complete)
 
-(defcustom git-complete-enable-dwim-newline nil
+(defcustom git-complete-enable-dwim-newline t
   "When non-nil, git-complete tries to guess if you want to a
 newline or not after completion. Otherwise TAB will not insert a
 newline but RET does."
