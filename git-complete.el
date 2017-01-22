@@ -47,6 +47,14 @@ modes."
   :type '(list symbol)
   :group 'git-complete)
 
+(defcustom git-complete-multiline-complete-threshold 0.4
+  "Threshold to determine whether to start multiline completion
+or not. When 0.4, which is the default value, starts multiline
+completion if the second line will be correctly completed with
+30% or greater probablity, for example."
+  :type 'number
+  :group 'git-complete)
+
 ;; * utilities
 
 (defun git-complete--trim-spaces (str)
@@ -93,21 +101,27 @@ is not under a git repo, raises an error."
 
 ;; * get candidates via git grep
 
-(defun git-complete--get-candidates (query &optional next-line)
+(defun git-complete--get-candidates (query &optional next-line threshold)
   (let* ((default-directory (git-complete--root-dir))
          (command (format "git grep -F -h %s %s"
                           (if next-line "-A1" "")
                           (shell-quote-argument query)))
          (lines (split-string (shell-command-to-string command) "\n"))
-         (hash (make-hash-table :test 'equal)))
+         (hash (make-hash-table :test 'equal))
+         (total-count 0))
     (while (and lines (cdr lines))
       (when next-line (pop lines))      ; pop the first line
       (let ((str (git-complete--trim-spaces (pop lines))))
-        (puthash str (1+ (gethash str hash 0)) hash))
+        (unless (string= "" str)
+          (cl-incf total-count)
+          (puthash str (1+ (gethash str hash 0)) hash)))
       (when next-line (pop lines)))     ; pop "--"
-    (let ((result nil))
+    (let* ((result nil)
+           (threshold (* (or threshold 0) total-count)))
       (maphash (lambda (k v) (push (cons k v) result)) hash)
-      (mapcar 'car (sort result (lambda (a b) (> (cdr a) (cdr b))))))))
+      (delq nil
+            (mapcar (lambda (x) (and (>= (cdr x) threshold) (car x)))
+                    (sort result (lambda (a b) (> (cdr a) (cdr b)))))))))
 
 ;; * do completion
 
@@ -165,14 +179,16 @@ is not under a git repo, raises an error."
         (not (zerop (forward-line -1))) ; EOL but also EOF
         (eobp))))                       ; next line is EOF
 
-(defun git-complete ()
+(defun git-complete (&optional multiline)
   (interactive)
   (let* ((next-line-p (looking-back "^[\s\t]*"))
          (query (save-excursion
                   (when next-line-p (forward-line -1) (end-of-line))
                   (git-complete--trim-spaces (buffer-substring (point-at-bol) (point)))))
-         (candidates (delete "" (and (not (string= query ""))
-                                     (git-complete--get-candidates query next-line-p)))))
+         (candidates (and (not (string= query ""))
+                          (git-complete--get-candidates
+                           query next-line-p
+                           (and multiline git-complete-multiline-complete-threshold)))))
     (if (null candidates)
         (message "No completions found.")
       (let ((completion (popup-menu* candidates :scroll-bar t :isearch t
@@ -193,7 +209,8 @@ is not under a git repo, raises an error."
           (setq end (point)))
         (indent-region beg end)
         (forward-line 1)
-        (back-to-indentation)))))
+        (back-to-indentation)
+        (git-complete t)))))
 
 ;; * provide
 
