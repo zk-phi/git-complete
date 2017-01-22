@@ -209,6 +209,7 @@ is not under a git repo, raises an error."
           (setq end (point)))
         (indent-region beg end)
         (forward-line 1)
+        (funcall indent-line-function)
         (back-to-indentation)
         (git-complete t)))))
 
