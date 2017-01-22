@@ -18,7 +18,6 @@
 ;;   (global-set-key (kbd "C-c C-c") 'git-complete)
 
 (require 'popup)
-(require 'cl-lib)
 
 (defgroup git-complete nil
   "Complete lines via git-grep results."
@@ -82,20 +81,21 @@ is not under a git repo, raises an error."
 
 (defun git-complete--get-unclosed-parens (str)
   "Parse parens in STR and return a string of unclosed parens."
-  (let ((expected-closes nil) syntax char)
+  (let ((expected-closes nil) syntax char class partner)
     (with-temp-buffer
       (save-excursion (insert str))
       (while (progn (skip-syntax-forward "^\\\\()") (not (eobp)))
-        (setq char   (char-after)
-              syntax (aref (syntax-table) (char-after)))
-        (cl-case (car syntax)
-          ((4)                          ; open
-           (push (cdr syntax) expected-closes))
-          ((5)                          ; close
-           (when (and expected-closes (= (car expected-closes) char))
-             (pop expected-closes)))
-          ((9)                          ; escape
-           (forward-char 1)))
+        (setq char    (char-after)
+              syntax  (aref (syntax-table) (char-after))
+              class   (car syntax)
+              partner (cdr syntax))
+        (cond ((= class 4)              ; open paren
+               (push partner expected-closes))
+              ((= class 5)              ; close paren
+               (when (and expected-closes (= (car expected-closes) char))
+                 (pop expected-closes)))
+              ((= class 9)              ; escape
+               (forward-char 1)))
         (forward-char 1)))
     (apply 'string (nreverse expected-closes))))
 
@@ -113,7 +113,7 @@ is not under a git repo, raises an error."
       (when next-line (pop lines))      ; pop the first line
       (let ((str (git-complete--trim-spaces (pop lines))))
         (unless (string= "" str)
-          (cl-incf total-count)
+          (setq total-count (1+ total-count))
           (puthash str (1+ (gethash str hash 0)) hash)))
       (when next-line (pop lines)))     ; pop "--"
     (let* ((result nil)
