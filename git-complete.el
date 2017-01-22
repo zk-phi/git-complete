@@ -201,10 +201,9 @@ is not under a git repo, raises an error."
           (when git-complete-enable-autopair
             (when (not (string= "" (setq close (git-complete--get-unclosed-parens completion))))
               (insert "\n" (if (memq major-mode git-complete-lispy-modes) "" "\n") close)))
-          (when (or (not (eolp))
-                    (if git-complete-enable-dwim-newline
-                        (git-complete--insert-newline-p)
-                      (= last-input-event 13))) ; 13 = RET
+          (when (if git-complete-enable-dwim-newline
+                    (git-complete--insert-newline-p)
+                  (eql last-input-event 13)) ; 13 = RET
             (insert "\n"))
           (setq end (point)))
         (indent-region beg end)
