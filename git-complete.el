@@ -101,7 +101,8 @@ is not under a git repo, raises an error."
 
 ;; * get candidates via git grep
 
-(defun git-complete--get-candidates (query &optional next-line threshold)
+(defun git-complete--get-candidates (query threshold &optional next-line)
+  "Get completion candidates with `git grep'."
   (let* ((default-directory (git-complete--root-dir))
          (command (format "git grep -F -h %s %s"
                           (if next-line "-A1" "")
@@ -179,16 +180,15 @@ is not under a git repo, raises an error."
         (not (zerop (forward-line -1))) ; EOL but also EOF
         (eobp))))                       ; next line is EOF
 
-(defun git-complete (&optional multiline)
+(defun git-complete (&optional threshold)
+  "Complete the line at point with `git grep'."
   (interactive)
   (let* ((next-line-p (looking-back "^[\s\t]*"))
          (query (save-excursion
                   (when next-line-p (forward-line -1) (end-of-line))
                   (git-complete--trim-spaces (buffer-substring (point-at-bol) (point)))))
          (candidates (and (not (string= query ""))
-                          (git-complete--get-candidates
-                           query next-line-p
-                           (and multiline git-complete-multiline-complete-threshold)))))
+                          (git-complete--get-candidates query (or threshold 0) next-line-p))))
     (if (null candidates)
         (message "No completions found.")
       (let ((completion (popup-menu* candidates :scroll-bar t :isearch t
@@ -211,7 +211,7 @@ is not under a git repo, raises an error."
         (forward-line 1)
         (funcall indent-line-function)
         (back-to-indentation)
-        (git-complete t)))))
+        (git-complete git-complete-multiline-complete-threshold)))))
 
 ;; * provide
 
