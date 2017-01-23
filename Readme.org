@@ -1,0 +1,59 @@
+* git-complete.el
+
+Linewise completion engine powered by =git grep=.
+
+=git grep= を使って頻繁に書く「行」を補完
+
+** Description
+
+=git-complete= provides an interactive command which, when invoked,
+scans the current git project with =git grep= and completes the
+current line.
+
+This may useful to insert idioms frequently used in the project
+without typing them.
+
+[[screencast.gif]]
+
+----
+
+The main idea is invented by hitode909 in =auto-programming.el=, and
+=git-complete=
+
+- is extended with some more features such as:
+  - grained control of newline insertion
+  - automatic parentheses insertion
+  - conditoinal multiline completion
+
+- is implemented in pure Emacs lisp (does not depends on an external
+  perl script)
+
+*** See also:
+
+- Atom version: =atom-auto-programming= by the author of
+  =auto-programming.el=
+  - https://github.com/hitode909/atom-auto-programming
+
+- Vim version: =vim-auto-programming= by haya14busa
+  - https://github.com/haya14busa/vim-auto-programming
+
+** Installation
+
+Load this package
+
+: (require 'git-complete)
+
+and (optionally) bind some keys.
+
+: (global-set-key (kbd "C-x C-x") 'git-complete)
+
+** Usage
+
+Type something in a buffer, under a git repository
+
+: SHA
+
+and =M-x git-complete= completes the rest of the line, if suitable
+one is found in your project.
+
+: use Digest::SHA;
