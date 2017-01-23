@@ -84,11 +84,8 @@ completion if the second line will be correctly completed with
 ;; * utilities
 
 (defun git-complete--trim-spaces (str)
-  "Remove leading/trailing whitespaces from STR. This is a
-non-destructive function."
-  (if (string-match "^[\s\t]*\\(.*[^\s\t]\\)[\s\t]*" str)
-      (match-string 1 str)
-    ""))
+  "Remove leading/trailing whitespaces from STR."
+  (replace-regexp-in-string "^[\s\t]*\\|[\s\t]*$" "" str))
 
 (defvar git-complete--popup-menu-keymap
   (let ((kmap (copy-keymap popup-menu-keymap)))
