@@ -201,7 +201,7 @@ is not under a git repo, raises an error."
      git-complete never inserts a newline."
   (save-excursion
     (or (not (eolp))                    ; not EOL
-        (not (zerop (forward-line -1))) ; EOL but also EOF
+        (not (zerop (forward-line 1)))  ; EOL but also EOF
         (eobp))))                       ; next line is EOF
 
 (defun git-complete (&optional threshold)
