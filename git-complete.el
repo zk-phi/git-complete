@@ -121,7 +121,7 @@ is not under a git repo, raises an error."
               ((= class 9)              ; escape
                (forward-char 1)))
         (forward-char 1)))
-    (apply 'string (nreverse expected-closes))))
+    (apply 'string expected-closes)))
 
 ;; * get candidates via git grep
 
