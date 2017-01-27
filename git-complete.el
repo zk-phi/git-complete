@@ -166,13 +166,18 @@ is not under a git repo, raises an error."
    utf8|[EOF]        use utf8;
                     |[EOF]
 
-3. next line is EOF -> insert newline
+3. next line is EOF or close paren -> insert newline
 
    use strict;       use strict;
    use warnings; ->  use warnings;
    utf8|             use utf8;
    [EOF]            |
                      [EOF]
+
+   foo {          foo {
+       $self| ->      my $self = shift;
+   }                  |
+                  }
 
 4. next line is empty -> DO NOT insert newline
 
@@ -200,9 +205,9 @@ is not under a git repo, raises an error."
    * since I have no good idea to distinguish these two cases,
      git-complete never inserts a newline."
   (save-excursion
-    (or (not (eolp))                    ; not EOL
-        (not (zerop (forward-line 1)))  ; EOL but also EOF
-        (eobp))))                       ; next line is EOF
+    (or (not (eolp))                              ; not EOL
+        (not (zerop (forward-line 1)))            ; EOL but also EOF
+        (or (eobp) (looking-at "[\s\t]*\\s)"))))) ; next line is EOF or close paren
 
 (defun git-complete (&optional threshold)
   "Complete the line at point with `git grep'."
