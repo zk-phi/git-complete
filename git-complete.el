@@ -215,37 +215,53 @@ is not under a git repo, raises an error."
         (not (zerop (forward-line 1)))            ; EOL but also EOF
         (or (eobp) (looking-at "[\s\t]*\\s)"))))) ; next line is EOF or close paren
 
+(defun git-complete--internal (from &optional threshold)
+  (when (< from (point))
+    (let* ((next-line-p (looking-back "^[\s\t]*"))
+           (query (save-excursion
+                    (when next-line-p (forward-line -1) (end-of-line))
+                    (buffer-substring from (point))))
+           (candidates (and (string-match "\\sw" query)
+                            (git-complete--get-candidates
+                             query (or threshold 0) next-line-p))))
+      (cond (candidates
+             (let ((completion (popup-menu* candidates :scroll-bar t :isearch t
+                                            :keymap git-complete--popup-menu-keymap))
+                   beg end)
+               (delete-region from (point))
+               (setq beg (point))
+               (insert completion)
+               (save-excursion
+                 (when git-complete-enable-autopair
+                   (let ((close (git-complete--get-unclosed-parens completion)))
+                     (unless (string= "" close)
+                       (insert "\n"
+                               (if (memq major-mode git-complete-lispy-modes) "" "\n")
+                               close))))
+                 (when (if git-complete-enable-dwim-newline
+                           (git-complete--insert-newline-p)
+                         (eql last-input-event 13)) ; 13 = RET
+                   (insert "\n"))
+                 (setq end (point)))
+               (indent-region beg end)
+               (forward-line 1)
+               (funcall indent-line-function)
+               (back-to-indentation)
+               (git-complete--internal (point-at-bol) git-complete-multiline-complete-threshold)))
+            ((and git-complete-enable-omni-completion (not next-line-p) (null threshold))
+             (save-excursion
+               (goto-char from)
+               (forward-word 1)
+               (skip-chars-forward "\s\t")
+               (setq from (point)))
+             (git-complete--internal from))
+            (t
+             (message "No completions found."))))))
+
 (defun git-complete (&optional threshold)
   "Complete the line at point with `git grep'."
   (interactive)
-  (let* ((next-line-p (looking-back "^[\s\t]*"))
-         (query (save-excursion
-                  (when next-line-p (forward-line -1) (end-of-line))
-                  (git-complete--trim-spaces (buffer-substring (point-at-bol) (point)))))
-         (candidates (and (not (string= query ""))
-                          (git-complete--get-candidates query (or threshold 0) next-line-p))))
-    (if (null candidates)
-        (message "No completions found.")
-      (let ((completion (popup-menu* candidates :scroll-bar t :isearch t
-                                     :keymap git-complete--popup-menu-keymap))
-            close beg end)
-        (delete-region (point) (point-at-bol))
-        (setq beg (point))
-        (insert completion)
-        (save-excursion
-          (when git-complete-enable-autopair
-            (when (not (string= "" (setq close (git-complete--get-unclosed-parens completion))))
-              (insert "\n" (if (memq major-mode git-complete-lispy-modes) "" "\n") close)))
-          (when (if git-complete-enable-dwim-newline
-                    (git-complete--insert-newline-p)
-                  (eql last-input-event 13)) ; 13 = RET
-            (insert "\n"))
-          (setq end (point)))
-        (indent-region beg end)
-        (forward-line 1)
-        (funcall indent-line-function)
-        (back-to-indentation)
-        (git-complete git-complete-multiline-complete-threshold)))))
+  (git-complete--internal (point-at-bol)))
 
 ;; * provide
 
