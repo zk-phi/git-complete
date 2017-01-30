@@ -81,6 +81,12 @@ completion if the second line will be correctly completed with
   :type 'number
   :group 'git-complete)
 
+(defcustom git-complete-enable-omni-completion t
+  "When non-nil and no completions found, shorten the query and
+try again."
+  :type 'boolean
+  :group 'git-complete)
+
 ;; * utilities
 
 (defun git-complete--trim-spaces (str)
