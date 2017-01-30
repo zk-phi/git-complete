@@ -81,7 +81,7 @@ completion if the second line will be correctly completed with
   :type 'number
   :group 'git-complete)
 
-(defcustom git-complete-enable-omni-completion t
+(defcustom git-complete-enable-omni-completion nil
   "When non-nil and no completions found, shorten the query and
 try again."
   :type 'boolean
