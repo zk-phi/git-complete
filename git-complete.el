@@ -110,15 +110,15 @@ is not under a git repo, raises an error."
       (save-excursion (insert str))
       (while (progn (skip-syntax-forward "^\\\\()") (not (eobp)))
         (setq char    (char-after)
-              syntax  (aref (syntax-table) (char-after))
+              syntax  (aref (syntax-table) char)
               class   (car syntax)
               partner (cdr syntax))
-        (cond ((= class 4)              ; open paren
+        (cond ((= class 4)              ; (string-to-syntax "(")
                (push partner expected-closes))
-              ((= class 5)              ; close paren
+              ((= class 5)              ; (string-to-syntax ")")
                (when (and expected-closes (= (car expected-closes) char))
                  (pop expected-closes)))
-              ((= class 9)              ; escape
+              ((= class 9)              ; (string-to-syntax "\\")
                (forward-char 1)))
         (forward-char 1)))
     (apply 'string expected-closes)))
