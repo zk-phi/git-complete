@@ -45,6 +45,7 @@
 ;;; Code:
 
 (require 'popup)
+(require 'cl-lib)
 
 (defgroup git-complete nil
   "Complete lines via git-grep results."
@@ -58,8 +59,10 @@ newline but RET does."
   :group 'git-complete)
 
 (defcustom git-complete-enable-autopair t
-  "When non-nil, close parens are automatically inserted when the
-completed line has unclosed parens."
+  "When non-nil, `git-complete' assumes that the parens are
+always balanced, and keep the balance on
+completion (i.e. automatically insert close parens together with
+open parens, and avoid inserting extra close parens)."
   :type 'boolean
   :group 'git-complete)
 
@@ -103,25 +106,26 @@ is not under a git repo, raises an error."
                   ((locate-dominating-file buffer-file-name ".git"))
                   (t (error "Not under a git repository."))))))
 
-(defun git-complete--get-unclosed-parens (str)
-  "Parse parens in STR and return a string of unclosed parens."
-  (let ((expected-closes nil) syntax char class partner)
+(defun git-complete--parse-parens (str)
+  "Parse str and returns unbalanced parens in the
+form ((UNCLOSED_CLOSES ...) . (EXTRA_CLOSES ...))."
+  (let (expected-closes extra-closes syntax char)
     (with-temp-buffer
       (save-excursion (insert str))
       (while (progn (skip-syntax-forward "^\\\\()") (not (eobp)))
-        (setq char    (char-after)
-              syntax  (aref (syntax-table) char)
-              class   (car syntax)
-              partner (cdr syntax))
-        (cond ((= class 4)              ; (string-to-syntax "(")
-               (push partner expected-closes))
-              ((= class 5)              ; (string-to-syntax ")")
-               (when (and expected-closes (= (car expected-closes) char))
-                 (pop expected-closes)))
-              ((= class 9)              ; (string-to-syntax "\\")
-               (forward-char 1)))
+        (setq char   (char-after)
+              syntax (aref (syntax-table) char)) ; (CLASS . PARTNER)
+        (cl-case (car syntax)
+          ((4)                          ; (string-to-syntax "(")
+           (push (cdr syntax) expected-closes))
+          ((5)                          ; (string-to-syntax ")")
+           (if (and expected-closes (= (car expected-closes) char))
+               (pop expected-closes)
+             (push char extra-closes)))
+          ((9)                          ; (string-to-syntax "\\")
+           (forward-char 1)))
         (forward-char 1)))
-    (apply 'string expected-closes)))
+    (cons expected-closes extra-closes)))
 
 ;; * get candidates via git grep
 
@@ -228,8 +232,16 @@ is not under a git repo, raises an error."
         (insert completion)
         (save-excursion
           (when git-complete-enable-autopair
-            (when (not (string= "" (setq close (git-complete--get-unclosed-parens completion))))
-              (insert "\n" (if (memq major-mode git-complete-lispy-modes) "" "\n") close)))
+            (let* ((res (git-complete--parse-parens completion))
+                   (expected (car res))
+                   (extra (cdr res)))
+              (when expected
+                (insert "\n"
+                        (if (memq major-mode git-complete-lispy-modes) "" "\n")
+                        (apply 'string expected)))
+              (when extra
+                (looking-at (mapconcat 'char-to-string extra "[\s\t\nabc]*"))
+                (replace-match ""))))
           (when (if git-complete-enable-dwim-newline
                     (git-complete--insert-newline-p)
                   (eql last-input-event 13)) ; 13 = RET
