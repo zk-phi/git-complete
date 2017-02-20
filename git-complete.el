@@ -73,7 +73,7 @@ open parens, and avoid inserting extra close parens)."
   "List of lisp-like language modes. Newline is not inserted
 after the point by when `git-complete-enable-autopair', in the
 modes."
-  :type '(list symbol)
+  :type '(repeat symbol)
   :group 'git-complete)
 
 (defcustom git-complete-multiline-complete-threshold 0.4
