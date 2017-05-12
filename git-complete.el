@@ -240,8 +240,10 @@ form ((UNCLOSED_CLOSES ...) . (EXTRA_CLOSES ...))."
                         (if (memq major-mode git-complete-lispy-modes) "" "\n")
                         (apply 'string expected)))
               (when extra
-                (looking-at (mapconcat 'char-to-string extra "[\s\t\nabc]*"))
-                (replace-match ""))))
+                (let ((regex (mapconcat
+                              (lambda (char) (concat "[\s\t\n]*" (char-to-string char)))
+                              extra "")))
+                  (when (looking-at regex) (save-excursion (replace-match "")))))))
           (when (if git-complete-enable-dwim-newline
                     (git-complete--insert-newline-p)
                   (eql last-input-event 13)) ; 13 = RET
