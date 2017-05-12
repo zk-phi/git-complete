@@ -213,15 +213,13 @@ form ((UNCLOSED_CLOSES ...) . (EXTRA_CLOSES ...))."
         (not (zerop (forward-line 1)))            ; EOL but also EOF
         (or (eobp) (looking-at "[\s\t]*\\s)"))))) ; next line is EOF or close paren
 
-(defun git-complete (&optional threshold)
-  "Complete the line at point with `git grep'."
-  (interactive)
+(defun git-complete--internal (threshold)
   (let* ((next-line-p (looking-back "^[\s\t]*"))
          (query (save-excursion
                   (when next-line-p (forward-line -1) (end-of-line))
                   (git-complete--trim-spaces (buffer-substring (point-at-bol) (point)))))
          (candidates (and (not (string= query ""))
-                          (git-complete--get-candidates query (or threshold 0) next-line-p))))
+                          (git-complete--get-candidates query threshold next-line-p))))
     (if (null candidates)
         (message "No completions found.")
       (let ((completion (popup-menu* candidates :scroll-bar t :isearch t
@@ -253,7 +251,12 @@ form ((UNCLOSED_CLOSES ...) . (EXTRA_CLOSES ...))."
         (forward-line 1)
         (funcall indent-line-function)
         (back-to-indentation)
-        (git-complete git-complete-multiline-complete-threshold)))))
+        (git-complete--internal git-complete-multiline-complete-threshold)))))
+
+(defun git-complete ()
+  "Complete the line at point with `git grep'."
+  (interactive)
+  (git-complete--internal 0))
 
 ;; * provide
 
