@@ -84,10 +84,22 @@ completion if the second line will be correctly completed with
   :type 'number
   :group 'git-complete)
 
+(defcustom git-complete-enable-omni-completion nil
+  "[Experimental] When non-nil and no candidates are found,
+shorten the query and search again."
+  :type 'boolean
+  :group 'git-complete)
+
 ;; * utilities
 
-(defun git-complete--trim-spaces (str)
-  "Remove leading/trailing whitespaces from STR."
+(defun git-complete--trim-spaces (str &optional trim-query)
+  "Remove leading/trailing whitespaces from STR. When TRIM-QUERY
+is specified, try to match TRIM-QUERY and STR, and if a match
+found, trim characters before the match-beginning in addition. If
+no matches found, return an empty string."
+  (when trim-query
+    (setq str (if (not (string-match (regexp-quote trim-query) str)) ""
+                  (substring str (match-beginning 0)))))
   (replace-regexp-in-string "^[\s\t]*\\|[\s\t]*$" "" str))
 
 (defvar git-complete--popup-menu-keymap
@@ -129,7 +141,7 @@ form ((UNCLOSED_CLOSES ...) . (EXTRA_CLOSES ...))."
 
 ;; * get candidates via git grep
 
-(defun git-complete--get-candidates (query threshold &optional next-line)
+(defun git-complete--get-candidates (query threshold next-line &optional omni-p)
   "Get completion candidates with `git grep'."
   (let* ((default-directory (git-complete--root-dir))
          (command (format "git grep -F -h %s %s"
@@ -140,7 +152,7 @@ form ((UNCLOSED_CLOSES ...) . (EXTRA_CLOSES ...))."
          (total-count 0))
     (while (and lines (cdr lines))
       (when next-line (pop lines))      ; pop the first line
-      (let ((str (git-complete--trim-spaces (pop lines))))
+      (let ((str (git-complete--trim-spaces (pop lines) (when omni-p query))))
         (unless (string= "" str)
           (setq total-count (1+ total-count))
           (puthash str (1+ (gethash str hash 0)) hash)))
@@ -213,50 +225,62 @@ form ((UNCLOSED_CLOSES ...) . (EXTRA_CLOSES ...))."
         (not (zerop (forward-line 1)))            ; EOL but also EOF
         (or (eobp) (looking-at "[\s\t]*\\s)"))))) ; next line is EOF or close paren
 
-(defun git-complete--internal (threshold)
+(defun git-complete--internal (threshold &optional omni-from)
   (let* ((next-line-p (looking-back "^[\s\t]*"))
          (query (save-excursion
                   (when next-line-p (forward-line -1) (end-of-line))
-                  (git-complete--trim-spaces (buffer-substring (point-at-bol) (point)))))
-         (candidates (and (not (string= query ""))
-                          (git-complete--get-candidates query threshold next-line-p))))
-    (if (null candidates)
-        (message "No completions found.")
-      (let ((completion (popup-menu* candidates :scroll-bar t :isearch t
-                                     :keymap git-complete--popup-menu-keymap))
-            close beg end)
-        (delete-region (point) (point-at-bol))
-        (setq beg (point))
-        (insert completion)
-        (save-excursion
-          (when git-complete-enable-autopair
-            (let* ((res (git-complete--parse-parens completion))
-                   (expected (car res))
-                   (extra (cdr res)))
-              (when expected
-                (insert "\n"
-                        (if (memq major-mode git-complete-lispy-modes) "" "\n")
-                        (apply 'string expected)))
-              (when extra
-                (let ((regex (mapconcat
-                              (lambda (char) (concat "[\s\t\n]*" (char-to-string char)))
-                              extra "")))
-                  (when (looking-at regex) (save-excursion (replace-match "")))))))
-          (when (if git-complete-enable-dwim-newline
-                    (git-complete--insert-newline-p)
-                  (eql last-input-event 13)) ; 13 = RET
-            (insert "\n"))
-          (setq end (point)))
-        (indent-region beg end)
-        (forward-line 1)
-        (funcall indent-line-function)
-        (back-to-indentation)
-        (git-complete--internal git-complete-multiline-complete-threshold)))))
+                  (git-complete--trim-spaces
+                   (buffer-substring (or omni-from (point-at-bol)) (point)))))
+         (candidates (when (not (string= query ""))
+                       (git-complete--get-candidates query threshold next-line-p omni-from))))
+    (cond (candidates
+           (let ((completion (popup-menu* candidates :scroll-bar t :isearch t
+                                          :keymap git-complete--popup-menu-keymap))
+                 beg end)
+             (delete-region (or omni-from (point-at-bol)) (point))
+             (setq beg (point))
+             (insert completion)
+             (save-excursion
+               (when git-complete-enable-autopair
+                 (let* ((res (git-complete--parse-parens completion))
+                        (expected (car res))
+                        (extra (cdr res)))
+                   (when expected
+                     (insert "\n"
+                             (if (memq major-mode git-complete-lispy-modes) "" "\n")
+                             (apply 'string expected)))
+                   (when extra
+                     (let ((regex (mapconcat
+                                   (lambda (char) (concat "[\s\t\n]*" (char-to-string char)))
+                                   extra "")))
+                       (when (looking-at regex) (save-excursion (replace-match "")))))))
+               (when (if git-complete-enable-dwim-newline
+                         (git-complete--insert-newline-p)
+                       (eql last-input-event 13)) ; 13 = RET
+                 (insert "\n"))
+               (setq end (point)))
+             (indent-region beg end)
+             (forward-line 1)
+             (funcall indent-line-function)
+             (back-to-indentation)
+             (let ((git-complete-enable-omni-completion nil))
+               (git-complete--internal git-complete-multiline-complete-threshold))))
+          ((and (not next-line-p) git-complete-enable-omni-completion)
+           (let ((next-from (save-excursion
+                              (when (search-forward-regexp
+                                     ".\\_>[\s\t]*"
+                                     (prog1 (point)
+                                       (goto-char (or omni-from (point-at-bol)))) t)
+                                (point)))))
+             (if next-from (git-complete--internal threshold next-from)
+               (message "No completions found."))))
+          (t
+           (message "No completions found.")))))
 
 (defun git-complete ()
   "Complete the line at point with `git grep'."
   (interactive)
-  (git-complete--internal 0))
+  (git-complete--internal 0.1))
 
 ;; * provide
 
