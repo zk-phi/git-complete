@@ -102,16 +102,11 @@ no matches found, return an empty string."
                   (substring str (match-beginning 0)))))
   (replace-regexp-in-string "^[\s\t]*\\|[\s\t]*$" "" str))
 
-(defvar git-complete--popup-menu-keymap
-  (let ((kmap (copy-keymap popup-menu-keymap)))
-    (define-key kmap (kbd "TAB") 'popup-select)
-    kmap)
-  "Keymap for git-complete popup menu.")
-
 (defvar-local git-complete--root-dir nil)
 (defun git-complete--root-dir ()
   "Find the root directory of this git repo. If current directory
-is not under a git repo, raises an error."
+is not under a git repo, raises an error. This function caches
+the result per buffer."
   (or git-complete--root-dir
       (setq git-complete--root-dir
             (cond ((null buffer-file-name) default-directory)
@@ -224,6 +219,12 @@ form ((UNCLOSED_CLOSES ...) . (EXTRA_CLOSES ...))."
     (or (not (eolp))                              ; not EOL
         (not (zerop (forward-line 1)))            ; EOL but also EOF
         (or (eobp) (looking-at "[\s\t]*\\s)"))))) ; next line is EOF or close paren
+
+(defvar git-complete--popup-menu-keymap
+  (let ((kmap (copy-keymap popup-menu-keymap)))
+    (define-key kmap (kbd "TAB") 'popup-select)
+    kmap)
+  "Keymap for git-complete popup menu.")
 
 (defun git-complete--internal (threshold &optional omni-from)
   (let* ((next-line-p (looking-back "^[\s\t]*"))
