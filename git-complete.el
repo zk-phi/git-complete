@@ -274,17 +274,17 @@ form (((EXTRA_OPEN . EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE
                  (let* ((res (git-complete--diff-parens
                               (git-complete--parse-parens deleted)
                               (git-complete--parse-parens completion)))
-                        (expected (mapcar 'cdr (car res)))
-                        (extra (mapcar 'car (cdr res))))
+                        (expected (car res))
+                        (extra (cdr res)))
                    (when expected
                      (insert "\n"
                              (if (memq major-mode git-complete-lispy-modes) "" "\n")
-                             (apply 'string expected)))
-                   (when extra
-                     (let ((regex (mapconcat
-                                   (lambda (char) (concat "[\s\t\n]*" (char-to-string char)))
-                                   extra "")))
-                       (when (looking-at regex) (save-excursion (replace-match "")))))))
+                             (apply 'string (mapcar 'cdr expected))))
+                   (while extra
+                     (if (looking-at (concat "[\s\t\n]*" (char-to-string (caar extra))))
+                         (replace-match "")
+                       (save-excursion (goto-char beg) (insert (char-to-string (cdar extra)))))
+                     (pop extra))))
                (when (if git-complete-enable-dwim-newline
                          (git-complete--insert-newline-p)
                        (eql last-input-event 13)) ; 13 = RET
