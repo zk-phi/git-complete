@@ -76,11 +76,17 @@ modes."
   :type '(repeat symbol)
   :group 'git-complete)
 
+(defcustom git-complete-threshold 0.01
+  "Threshold to filter the results from `git grep'. When 0.01 for
+example, which is the default value, lines which occupy less than
+1% among the results are dropped from completion candidates."
+  :type 'number
+  :group 'git-complete)
+
 (defcustom git-complete-multiline-complete-threshold 0.4
-  "Threshold to determine whether to start multiline completion
-or not. When 0.4, which is the default value, starts multiline
-completion if the second line will be correctly completed with
-30% or greater probablity, for example."
+  "Like `git-complete-threshold' but used only during multiline
+completion. Set this variable equal or greater than 1.0 to
+disable multiline completion"
   :type 'number
   :group 'git-complete)
 
@@ -311,7 +317,7 @@ form (((EXTRA_OPEN . EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE
 (defun git-complete ()
   "Complete the line at point with `git grep'."
   (interactive)
-  (git-complete--internal 0.1))
+  (git-complete--internal git-complete-threshold))
 
 ;; * provide
 
