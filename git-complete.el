@@ -85,7 +85,7 @@ completion if the second line will be correctly completed with
   :group 'git-complete)
 
 (defcustom git-complete-enable-omni-completion nil
-  "[Experimental] When non-nil and no candidates are found,
+  "When non-nil and no candidates are found,
 shorten the query and search again."
   :type 'boolean
   :group 'git-complete)
