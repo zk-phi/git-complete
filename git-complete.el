@@ -115,8 +115,9 @@ the result per buffer."
 
 (defun git-complete--parse-parens (str)
   "Parse str and returns unbalanced parens in the
-form ((UNCLOSED_CLOSES ...) . (EXTRA_CLOSES ...))."
-  (let (expected-closes extra-closes syntax char)
+form (((EXTRA_OPEN . EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE
+. EXPECTED_OPEN) ...))."
+  (let (opens closes syntax char)
     (with-temp-buffer
       (save-excursion (insert str))
       (while (progn (skip-syntax-forward "^\\\\()") (not (eobp)))
@@ -124,15 +125,41 @@ form ((UNCLOSED_CLOSES ...) . (EXTRA_CLOSES ...))."
               syntax (aref (syntax-table) char)) ; (CLASS . PARTNER)
         (cl-case (car syntax)
           ((4)                          ; (string-to-syntax "(")
-           (push (cdr syntax) expected-closes))
+           (push (cons char (cdr syntax)) opens))
           ((5)                          ; (string-to-syntax ")")
-           (if (and expected-closes (= (car expected-closes) char))
-               (pop expected-closes)
-             (push char extra-closes)))
+           (if (and opens (= (cdar opens) char))
+               (pop opens)
+             (push (cons char (cdr syntax)) closes)))
           ((9)                          ; (string-to-syntax "\\")
            (forward-char 1)))
         (forward-char 1)))
-    (cons expected-closes extra-closes)))
+    (cons opens closes)))
+
+(defun git-complete--diff-parens (lst1 lst2)
+  "Compute differens of two results from
+`git-complete--parse-parens'."
+  (let ((existing-opens (car lst1))
+        (added-opens (car lst2))
+        (existing-closes (cdr lst1))
+        (added-closes (cdr lst2))
+        deleted-opens deleted-closes)
+    ;; open parens
+    (while (and existing-opens added-opens)
+      (if (= (caar existing-opens) (caar added-opens))
+          (progn (pop existing-opens) (pop added-opens))
+        (push (pop existing-opens) deleted-opens)))
+    (when existing-opens
+      (setq deleted-opens (nconc (nreverse existing-opens) deleted-opens)))
+    ;; close parens
+    (while (and existing-closes added-closes)
+      (if (= (caar existing-closes) (caar added-closes))
+          (progn (pop existing-closes) (pop added-closes))
+        (push (pop existing-closes) deleted-closes)))
+    (when existing-closes
+      (setq deleted-closes (nconc (nreverse existing-closes) deleted-closes)))
+    ;; result
+    (cons (nconc (mapcar (lambda (a) (cons (cdr a) (car a))) deleted-closes) added-opens)
+          (nconc (mapcar (lambda (a) (cons (cdr a) (car a))) deleted-opens) added-closes))))
 
 ;; * get candidates via git grep
 
@@ -237,15 +264,18 @@ form ((UNCLOSED_CLOSES ...) . (EXTRA_CLOSES ...))."
     (cond (candidates
            (let ((completion (popup-menu* candidates :scroll-bar t :isearch t
                                           :keymap git-complete--popup-menu-keymap))
+                 (deleted (buffer-substring (or omni-from (point-at-bol)) (point)))
                  beg end)
              (delete-region (or omni-from (point-at-bol)) (point))
              (setq beg (point))
              (insert completion)
              (save-excursion
                (when git-complete-enable-autopair
-                 (let* ((res (git-complete--parse-parens completion))
-                        (expected (car res))
-                        (extra (cdr res)))
+                 (let* ((res (git-complete--diff-parens
+                              (git-complete--parse-parens deleted)
+                              (git-complete--parse-parens completion)))
+                        (expected (mapcar 'cdr (car res)))
+                        (extra (mapcar 'car (cdr res))))
                    (when expected
                      (insert "\n"
                              (if (memq major-mode git-complete-lispy-modes) "" "\n")
