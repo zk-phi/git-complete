@@ -305,9 +305,8 @@ form (((EXTRA_OPEN . EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE
           ((and (not next-line-p) git-complete-enable-omni-completion)
            (let ((next-from (save-excursion
                               (when (search-forward-regexp
-                                     ".\\_>[\s\t]*"
-                                     (prog1 (point)
-                                       (goto-char (or omni-from (point-at-bol)))) t)
+                                     ".\\_<"
+                                     (prog1 (point) (goto-char (or omni-from (point-at-bol)))) t)
                                 (point)))))
              (if next-from (git-complete--internal threshold next-from)
                (message "No completions found."))))
