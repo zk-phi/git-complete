@@ -100,9 +100,10 @@ shorten the query and search again."
 
 (defun git-complete--trim-spaces (str &optional trim-query)
   "Remove leading/trailing whitespaces from STR. When TRIM-QUERY
-is specified, try to match TRIM-QUERY and STR, and if a match
-found, trim characters before the match-beginning in addition. If
-no matches found, return an empty string."
+is specified, try to match TRIM-QUERY with STR, and if a match
+found, remove characters before the match-beginning in
+addition. If TRIM-QUERY is specified but no matches found, return
+an empty string."
   (when trim-query
     (setq str (if (not (string-match (regexp-quote trim-query) str)) ""
                   (substring str (match-beginning 0)))))
@@ -110,9 +111,9 @@ no matches found, return an empty string."
 
 (defvar-local git-complete--root-dir nil)
 (defun git-complete--root-dir ()
-  "Find the root directory of this git repo. If current directory
-is not under a git repo, raises an error. This function caches
-the result per buffer."
+  "Find the root directory of this git repo. If the current
+directory is not under a git repo, raises an error. This function
+caches the result per buffer."
   (or git-complete--root-dir
       (setq git-complete--root-dir
             (cond ((null buffer-file-name) default-directory)
@@ -142,8 +143,7 @@ form (((EXTRA_OPEN . EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE
     (cons opens closes)))
 
 (defun git-complete--diff-parens (lst1 lst2)
-  "Compute differens of two results from
-`git-complete--parse-parens'."
+  "Compute differens of two results of `git-complete--parse-parens'."
   (let ((existing-opens (car lst1))
         (added-opens (car lst2))
         (existing-closes (cdr lst1))
@@ -192,7 +192,7 @@ form (((EXTRA_OPEN . EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE
             (mapcar (lambda (x) (and (>= (cdr x) threshold) (car x)))
                     (sort result (lambda (a b) (> (cdr a) (cdr b)))))))))
 
-;; * do completion
+;; * replace substring smartly
 
 (defun git-complete--insert-newline-p ()
   "Determine whether to insert newline here, after completion.
@@ -252,6 +252,8 @@ form (((EXTRA_OPEN . EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE
     (or (not (eolp))                              ; not EOL
         (not (zerop (forward-line 1)))            ; EOL but also EOF
         (or (eobp) (looking-at "[\s\t]*\\s)"))))) ; next line is EOF or close paren
+
+;; * interface
 
 (defvar git-complete--popup-menu-keymap
   (let ((kmap (copy-keymap popup-menu-keymap)))
