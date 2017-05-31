@@ -253,6 +253,44 @@ form (((EXTRA_OPEN . EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE
         (not (zerop (forward-line 1)))            ; EOL but also EOF
         (or (eobp) (looking-at "[\s\t]*\\s)"))))) ; next line is EOF or close paren
 
+(defun git-complete--replace-substring (from to replacement &optional force-newline)
+  "Replace region between FROM TO with REPLACEMENT and move the
+point just after the inserted text. Unlike `replace-string', this
+function tries to keep parenthesis balanced, insert newlines
+after the replacement text as needed, and indent the inserted
+text (the behavior may disabled via customize options). If
+FORCE-NEWLINE is specified and non-nil, this function always
+inserts a newline after the replacement text."
+  (let ((deleted (buffer-substring from to)) end)
+    (delete-region from to)
+    (setq from (goto-char from))
+    (insert replacement)
+    (save-excursion
+      (when git-complete-enable-autopair
+        (let* ((res (git-complete--diff-parens
+                     (git-complete--parse-parens deleted)
+                     (git-complete--parse-parens replacement)))
+               (expected (car res))
+               (extra (cdr res)))
+          (when expected
+            (insert "\n"
+                    (if (memq major-mode git-complete-lispy-modes) "" "\n")
+                    (apply 'string (mapcar 'cdr expected))))
+          (while extra
+            (if (looking-at (concat "[\s\t\n]*" (char-to-string (caar extra))))
+                (replace-match "")
+              (save-excursion (goto-char from) (insert (char-to-string (cdar extra)))))
+            (pop extra))))
+      (when (if git-complete-enable-dwim-newline
+                (git-complete--insert-newline-p)
+              force-newline)
+        (insert "\n"))
+      (setq end (point)))
+    (indent-region from end)
+    (forward-line 1)
+    (funcall indent-line-function)
+    (back-to-indentation)))
+
 ;; * interface
 
 (defvar git-complete--popup-menu-keymap
@@ -271,37 +309,11 @@ form (((EXTRA_OPEN . EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE
                        (git-complete--get-candidates query threshold next-line-p omni-from))))
     (cond (candidates
            (let ((completion (popup-menu* candidates :scroll-bar t :isearch t
-                                          :keymap git-complete--popup-menu-keymap))
-                 (deleted (buffer-substring (or omni-from (point-at-bol)) (point)))
-                 beg end)
-             (delete-region (or omni-from (point-at-bol)) (point))
-             (setq beg (point))
-             (insert completion)
-             (save-excursion
-               (when git-complete-enable-autopair
-                 (let* ((res (git-complete--diff-parens
-                              (git-complete--parse-parens deleted)
-                              (git-complete--parse-parens completion)))
-                        (expected (car res))
-                        (extra (cdr res)))
-                   (when expected
-                     (insert "\n"
-                             (if (memq major-mode git-complete-lispy-modes) "" "\n")
-                             (apply 'string (mapcar 'cdr expected))))
-                   (while extra
-                     (if (looking-at (concat "[\s\t\n]*" (char-to-string (caar extra))))
-                         (replace-match "")
-                       (save-excursion (goto-char beg) (insert (char-to-string (cdar extra)))))
-                     (pop extra))))
-               (when (if git-complete-enable-dwim-newline
-                         (git-complete--insert-newline-p)
-                       (eql last-input-event 13)) ; 13 = RET
-                 (insert "\n"))
-               (setq end (point)))
-             (indent-region beg end)
-             (forward-line 1)
-             (funcall indent-line-function)
-             (back-to-indentation)
+                                          :keymap git-complete--popup-menu-keymap)))
+             (git-complete--replace-substring
+              (or omni-from (point-at-bol)) (point)
+              completion
+              (eql last-input-event 13)) ; 13 = RET
              (let ((git-complete-enable-omni-completion nil))
                (git-complete--internal git-complete-multiline-complete-threshold))))
           ((and (not next-line-p) git-complete-enable-omni-completion)
