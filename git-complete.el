@@ -169,22 +169,22 @@ form (((EXTRA_OPEN . EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE
 
 ;; * get candidates via git grep
 
-(defun git-complete--get-candidates (query threshold next-line &optional omni-p)
+(defun git-complete--get-candidates (query &optional threshold multiline-p omni-p)
   "Get completion candidates with `git grep'."
   (let* ((default-directory (git-complete--root-dir))
          (command (format "git grep -F -h %s %s"
-                          (if next-line "-A1" "")
+                          (if multiline-p "-A1" "")
                           (shell-quote-argument query)))
          (lines (split-string (shell-command-to-string command) "\n"))
          (hash (make-hash-table :test 'equal))
          (total-count 0))
     (while (and lines (cdr lines))
-      (when next-line (pop lines))      ; pop the first line
+      (when multiline-p (pop lines))      ; pop the first line
       (let ((str (git-complete--trim-spaces (pop lines) (when omni-p query))))
         (unless (string= "" str)
           (setq total-count (1+ total-count))
           (puthash str (1+ (gethash str hash 0)) hash)))
-      (when next-line (pop lines)))     ; pop "--"
+      (when multiline-p (pop lines)))     ; pop "--"
     (let* ((result nil)
            (threshold (* (or threshold 0) total-count)))
       (maphash (lambda (k v) (push (cons k v) result)) hash)
