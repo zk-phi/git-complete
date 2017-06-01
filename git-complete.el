@@ -83,7 +83,7 @@ example, which is the default value, lines which occupy less than
   :type 'number
   :group 'git-complete)
 
-(defcustom git-complete-multiline-complete-threshold 0.4
+(defcustom git-complete-multiline-completion-threshold 0.4
   "Like `git-complete-threshold' but used only during multiline
 completion. Set this variable equal or greater than 1.0 to
 disable multiline completion"
@@ -315,7 +315,7 @@ inserts a newline after the replacement text."
               completion
               (eql last-input-event 13)) ; 13 = RET
              (let ((git-complete-enable-omni-completion nil))
-               (git-complete--internal git-complete-multiline-complete-threshold))))
+               (git-complete--internal git-complete-multiline-completion-threshold))))
           ((and (not next-line-p) git-complete-enable-omni-completion)
            (let ((next-from (save-excursion
                               (when (search-forward-regexp
