@@ -51,13 +51,6 @@
   "Complete lines via git-grep results."
   :group 'git-complete)
 
-(defcustom git-complete-enable-dwim-newline t
-  "When non-nil, git-complete tries to guess if you want to a
-newline or not after completion. Otherwise TAB will not insert a
-newline but RET does."
-  :type 'boolean
-  :group 'git-complete)
-
 (defcustom git-complete-enable-autopair t
   "When non-nil, `git-complete' assumes that the parens are
 always balanced, and keep the balance on
@@ -119,6 +112,8 @@ caches the result per buffer."
             (cond ((null buffer-file-name) default-directory)
                   ((locate-dominating-file buffer-file-name ".git"))
                   (t (error "Not under a git repository."))))))
+
+;; * autopair utility fns
 
 (defun git-complete--parse-parens (str)
   "Parse str and returns unbalanced parens in the
@@ -194,97 +189,34 @@ form (((EXTRA_OPEN . EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE
 
 ;; * replace substring smartly
 
-(defun git-complete--insert-newline-p ()
-  "Determine whether to insert newline here, after completion.
-
-1. not EOL -> insert newline
-
-   use strict;            use strict;
-   warnings|use utf8; ->  use warnings;
-                         |use utf8;
-
-2. EOF -> insert newline
-
-   use strict;       use strict;
-   use warnings; ->  use warnings;
-   utf8|[EOF]        use utf8;
-                    |[EOF]
-
-3. next line is EOF or close paren -> insert newline
-
-   use strict;       use strict;
-   use warnings; ->  use warnings;
-   utf8|             use utf8;
-   [EOF]            |
-                     [EOF]
-
-   foo {          foo {
-       $self| ->      my $self = shift;
-   }                  |
-                  }
-
-4. next line is empty -> DO NOT insert newline
-
-   use strict;       use strict
-   use warnings; ->  use warnings;
-   utf8|             use utf8;
-                    |
-   sub foo {         sub foo {
-
-5. next line is not empty
-   a. current line hasn't been empty -> DO NOT insert newline
-
-      use strict;     use strict;     use strict;
-      use utf8;   ->  warnings|   ->  use warnings;
-                      use utf8;      |use utf8;
-
-   b. the line had been empty -> insert newline
-
-      use strict;      use strict;       use strict;
-      use warnings; -> use warnings; ->  use warnings;
-                       utf8|             use utf8;
-      sub foo {        sub foo {        |
-                                         sub foo{
-
-   * since I have no good idea to distinguish these two cases,
-     git-complete never inserts a newline."
-  (save-excursion
-    (or (not (eolp))                              ; not EOL
-        (not (zerop (forward-line 1)))            ; EOL but also EOF
-        (or (eobp) (looking-at "[\s\t]*\\s)"))))) ; next line is EOF or close paren
-
-(defun git-complete--replace-substring (from to replacement &optional force-newline)
+(defun git-complete--replace-substring (from to replacement)
   "Replace region between FROM TO with REPLACEMENT and move the
 point just after the inserted text. Unlike `replace-string', this
-function tries to keep parenthesis balanced, insert newlines
-after the replacement text as needed, and indent the inserted
-text (the behavior may disabled via customize options). If
-FORCE-NEWLINE is specified and non-nil, this function always
-inserts a newline after the replacement text."
+function tries to keep parenthesis balanced and indent the
+inserted text (the behavior may disabled via customize options)."
   (let ((deleted (buffer-substring from to)) end)
     (delete-region from to)
     (setq from (goto-char from))
     (insert replacement)
     (save-excursion
-      (when git-complete-enable-autopair
-        (let* ((res (git-complete--diff-parens
-                     (git-complete--parse-parens deleted)
-                     (git-complete--parse-parens replacement)))
-               (expected (car res))
-               (extra (cdr res)))
-          (when expected
-            (insert "\n"
-                    (if (memq major-mode git-complete-lispy-modes) "" "\n")
-                    (apply 'string (mapcar 'cdr expected))))
-          (while extra
-            (if (looking-at (concat "[\s\t\n]*" (char-to-string (caar extra))))
-                (replace-match "")
-              (save-excursion (goto-char from) (insert (char-to-string (cdar extra)))))
-            (pop extra))))
-      (when (if git-complete-enable-dwim-newline
-                (git-complete--insert-newline-p)
-              force-newline)
-        (insert "\n"))
+      (let (skip-newline)
+        (when git-complete-enable-autopair
+          (let* ((res (git-complete--diff-parens
+                       (git-complete--parse-parens deleted)
+                       (git-complete--parse-parens replacement)))
+                 (expected (car res))
+                 (extra (cdr res)))
+            (when expected
+              (insert "\n"
+                      (if (memq major-mode git-complete-lispy-modes) "" "\n")
+                      (apply 'string (mapcar 'cdr expected)))
+              (setq skip-newline t))
+            (while extra
+              (if (looking-at (concat "[\s\t\n]*" (char-to-string (caar extra))))
+                  (replace-match "")
+                (save-excursion (goto-char from) (insert (char-to-string (cdar extra)))))
+              (pop extra))))
+        (unless skip-newline (insert "\n")))
       (setq end (point)))
     (indent-region from end)
     (forward-line 1)
@@ -311,9 +243,7 @@ inserts a newline after the replacement text."
            (let ((completion (popup-menu* candidates :scroll-bar t :isearch t
                                           :keymap git-complete--popup-menu-keymap)))
              (git-complete--replace-substring
-              (or omni-from (point-at-bol)) (point)
-              completion
-              (eql last-input-event 13)) ; 13 = RET
+              (or omni-from (point-at-bol)) (point) completion)
              (let ((git-complete-enable-omni-completion nil))
                (git-complete--internal git-complete-multiline-completion-threshold))))
           ((and (not next-line-p) git-complete-enable-omni-completion)
