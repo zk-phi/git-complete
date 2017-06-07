@@ -71,8 +71,8 @@ modes."
 
 (defcustom git-complete-threshold 0.01
   "Threshold to filter the results from `git grep'. When 0.01 for
-example, which is the default value, lines which occupy less than
-1% among the results are dropped from completion candidates."
+example, which is the default value, completion cnadidates which
+occupy less than 1% among the grep results are dropped."
   :type 'number
   :group 'git-complete)
 
