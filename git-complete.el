@@ -91,16 +91,30 @@ shorten the query and search again."
 
 ;; * utilities
 
-(defun git-complete--trim-spaces (str &optional trim-query)
+(defun git-complete--trim-string (str &optional trim-query delimited)
   "Remove leading/trailing whitespaces from STR. When TRIM-QUERY
 is specified, try to match TRIM-QUERY with STR, and if a match
 found, remove characters before the match-beginning in
 addition. If TRIM-QUERY is specified but no matches found, return
-an empty string."
-  (when trim-query
-    (setq str (if (not (string-match (regexp-quote trim-query) str)) ""
-                  (substring str (match-beginning 0)))))
-  (replace-regexp-in-string "^[\s\t]*\\|[\s\t]*$" "" str))
+an empty string. If DELIMITED is specified and STR has more close
+parens than open parens, characters outside the unbalanced close
+parens (close parens which do not have matching open parens) are
+also removed."
+  (with-temp-buffer
+    (save-excursion (insert str))
+    (when trim-query
+      (unless (search-forward trim-query nil t)
+        (goto-char (point-max))))
+    (skip-chars-forward "\s\t")
+    (delete-region (point-min) (point))
+    (when delimited
+      (ignore-errors
+        (up-list 1)
+        (delete-region (1- (point)) (point-max))))
+    (goto-char (point-max))
+    (skip-chars-backward "\s\t")
+    (delete-region (point) (point-max))
+    (buffer-string)))
 
 (defvar-local git-complete--root-dir nil)
 (defun git-complete--root-dir ()
@@ -175,7 +189,7 @@ form (((EXTRA_OPEN . EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE
          (total-count 0))
     (while (and lines (cdr lines))
       (when multiline-p (pop lines))      ; pop the first line
-      (let ((str (git-complete--trim-spaces (pop lines) (when omni-p query))))
+      (let ((str (git-complete--trim-string (pop lines) (when omni-p query) omni-p)))
         (unless (string= "" str)
           (setq total-count (1+ total-count))
           (puthash str (1+ (gethash str hash 0)) hash)))
@@ -235,7 +249,7 @@ inserted text (the behavior may disabled via customize options)."
   (let* ((next-line-p (looking-back "^[\s\t]*"))
          (query (save-excursion
                   (when next-line-p (forward-line -1) (end-of-line))
-                  (git-complete--trim-spaces
+                  (git-complete--trim-string
                    (buffer-substring (or omni-from (point-at-bol)) (point)))))
          (candidates (when (not (string= query ""))
                        (git-complete--get-candidates query threshold next-line-p omni-from))))
