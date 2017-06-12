@@ -130,9 +130,9 @@ caches the result per buffer."
 ;; * smart string substitution
 
 (defun git-complete--parse-parens (str)
-  "Parse str and returns unbalanced parens in the
-form (((EXTRA_OPEN . EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE
-. EXPECTED_OPEN) ...))."
+  "Internal function for `git-complete--replace-substring'. Parse
+str and returns unbalanced parens in the form (((EXTRA_OPEN
+. EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE . EXPECTED_OPEN) ...))."
   (let (opens closes syntax char)
     (with-temp-buffer
       (save-excursion (insert str))
@@ -152,7 +152,9 @@ form (((EXTRA_OPEN . EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE
     (cons opens closes)))
 
 (defun git-complete--diff-parens (lst1 lst2)
-  "Compute differens of two results of `git-complete--parse-parens'."
+  "Internal function for
+`git-complete--replace-substring'. Compute difference of two
+results of `git-complete--parse-parens'."
   (let ((existing-opens (car lst1))
         (added-opens (car lst2))
         (existing-closes (cdr lst1))
