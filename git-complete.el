@@ -127,7 +127,7 @@ caches the result per buffer."
                   ((locate-dominating-file buffer-file-name ".git"))
                   (t (error "Not under a git repository."))))))
 
-;; * autopair utility fns
+;; * smart string substitution
 
 (defun git-complete--parse-parens (str)
   "Parse str and returns unbalanced parens in the
@@ -176,33 +176,6 @@ form (((EXTRA_OPEN . EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE
     (cons (nconc (mapcar (lambda (a) (cons (cdr a) (car a))) deleted-closes) added-opens)
           (nconc (mapcar (lambda (a) (cons (cdr a) (car a))) deleted-opens) added-closes))))
 
-;; * get candidates via git grep
-
-(defun git-complete--get-candidates (query &optional threshold multiline-p omni-p)
-  "Get completion candidates with `git grep'."
-  (let* ((default-directory (git-complete--root-dir))
-         (command (format "git grep -F -h %s %s"
-                          (if multiline-p "-A1" "")
-                          (shell-quote-argument query)))
-         (lines (split-string (shell-command-to-string command) "\n"))
-         (hash (make-hash-table :test 'equal))
-         (total-count 0))
-    (while (and lines (cdr lines))
-      (when multiline-p (pop lines))      ; pop the first line
-      (let ((str (git-complete--trim-string (pop lines) (when omni-p query) omni-p)))
-        (unless (string= "" str)
-          (setq total-count (1+ total-count))
-          (puthash str (1+ (gethash str hash 0)) hash)))
-      (when multiline-p (pop lines)))     ; pop "--"
-    (let* ((result nil)
-           (threshold (* (or threshold 0) total-count)))
-      (maphash (lambda (k v) (push (cons k v) result)) hash)
-      (delq nil
-            (mapcar (lambda (x) (and (>= (cdr x) threshold) (car x)))
-                    (sort result (lambda (a b) (> (cdr a) (cdr b)))))))))
-
-;; * replace substring smartly
-
 (defun git-complete--replace-substring (from to replacement)
   "Replace region between FROM TO with REPLACEMENT and move the
 point just after the inserted text. Unlike `replace-string', this
@@ -236,6 +209,31 @@ inserted text (the behavior may disabled via customize options)."
     (forward-line 1)
     (funcall indent-line-function)
     (back-to-indentation)))
+
+;; * get candidates via git grep
+
+(defun git-complete--get-candidates (query &optional threshold multiline-p omni-p)
+  "Get completion candidates with `git grep'."
+  (let* ((default-directory (git-complete--root-dir))
+         (command (format "git grep -F -h %s %s"
+                          (if multiline-p "-A1" "")
+                          (shell-quote-argument query)))
+         (lines (split-string (shell-command-to-string command) "\n"))
+         (hash (make-hash-table :test 'equal))
+         (total-count 0))
+    (while (and lines (cdr lines))
+      (when multiline-p (pop lines))      ; pop the first line
+      (let ((str (git-complete--trim-string (pop lines) (when omni-p query) omni-p)))
+        (unless (string= "" str)
+          (setq total-count (1+ total-count))
+          (puthash str (1+ (gethash str hash 0)) hash)))
+      (when multiline-p (pop lines)))     ; pop "--"
+    (let* ((result nil)
+           (threshold (* (or threshold 0) total-count)))
+      (maphash (lambda (k v) (push (cons k v) result)) hash)
+      (delq nil
+            (mapcar (lambda (x) (and (>= (cdr x) threshold) (car x)))
+                    (sort result (lambda (a b) (> (cdr a) (cdr b)))))))))
 
 ;; * interface
 
