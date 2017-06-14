@@ -199,7 +199,7 @@ results of `git-complete--parse-parens'."
       (setq deleted-closes (nconc (nreverse existing-closes) deleted-closes)))
     ;; result
     (cons (nconc (mapcar (lambda (a) (cons (cdr a) (car a))) deleted-closes) added-opens)
-          (nconc (mapcar (lambda (a) (cons (cdr a) (car a))) deleted-opens) added-closes))))
+          (nreverse (nconc (mapcar (lambda (a) (cons (cdr a) (car a))) deleted-opens) added-closes)))))
 
 (defun git-complete--replace-substring (from to replacement &optional oneline)
   "Replace region between FROM TO with REPLACEMENT and move the
