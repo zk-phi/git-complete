@@ -104,15 +104,25 @@ result."
   "Like `up-list' but regardless of `forward-sexp-function'."
   (goto-char (or (scan-lists (point) 1 1) (buffer-end 1))))
 
-(defun git-complete--trim-string (str &optional trim-query delimited)
-  "Remove leading/trailing whitespaces from STR. When TRIM-QUERY
-is specified, try to match TRIM-QUERY with STR, and if a match
-found, remove characters before the match-end in addition. If
-TRIM-QUERY is specified but no matches found, return an empty
-string. If DELIMITED is specified and STR has more close parens
-than open parens, characters outside the unbalanced close
-parens (close parens which do not have matching open parens) are
-also removed."
+(defun git-complete--trim-spaces (str left right)
+  "Remove leading/trailing whitespaces from STR."
+  (replace-regexp-in-string
+   (concat "^" (if left "[\s\t]*" "") "\\|" (if right "[\s\t]*" "") "$") "" str))
+
+(defun git-complete--trim-candidate (str trim-query delimited)
+  "Format candidate (= result from git-complete) by removing some
+leading/trailing characters.
+
+1. When TRIM-QUERY is non-nil, try to match TRIM-QUERY with STR,
+and remove characters before the match-end (if no matches are
+found, return an empty string). Otherwise remove leading
+whitespaces.
+
+2. When DELIMITED is non-nil and STR has more close parens than
+open parens, remove all characters outside the unbalanced close
+parens (close parens which do not have matching open parens).
+
+3.Remove all trailing whitespaces."
   (with-temp-buffer
     (save-excursion (insert str))
     (if trim-query
@@ -290,7 +300,7 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
            lst)
       (while (and lines (cdr lines))
         (when multiline-p (pop lines))   ; pop the first line
-        (let ((str (git-complete--trim-string
+        (let ((str (git-complete--trim-candidate
                     (pop lines) (unless whole-line-p query) (not whole-line-p))))
           (unless (string= "" str) (push str lst)))
         (when multiline-p (pop lines)))  ; pop "--"
@@ -310,8 +320,8 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
   (let* ((next-line-p (looking-back "^[\s\t]*"))
          (query (save-excursion
                   (when next-line-p (forward-line -1) (end-of-line))
-                  (git-complete--trim-string
-                   (buffer-substring (or omni-from (point-at-bol)) (point)))))
+                  (git-complete--trim-spaces
+                   (buffer-substring (or omni-from (point-at-bol)) (point)) t (null omni-from))))
          (candidates (when (not (string= query ""))
                        (git-complete--get-candidates query threshold (null omni-from) next-line-p))))
     (cond (candidates
