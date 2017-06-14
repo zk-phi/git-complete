@@ -91,6 +91,10 @@ shorten the query and search again."
 
 ;; * utilities
 
+(defun git-complete--up-list-unsafe ()
+  "Like `up-list' but regardless of `forward-sexp-function'."
+  (goto-char (or (scan-lists (point) 1 1) (buffer-end 1))))
+
 (defun git-complete--trim-string (str &optional trim-query delimited)
   "Remove leading/trailing whitespaces from STR. When TRIM-QUERY
 is specified, try to match TRIM-QUERY with STR, and if a match
@@ -109,7 +113,7 @@ also removed."
     (delete-region (point-min) (point))
     (when delimited
       (ignore-errors
-        (up-list 1)
+        (git-complete--up-list-unsafe)
         (delete-region (1- (point)) (point-max))))
     (goto-char (point-max))
     (skip-chars-backward "\s\t")
