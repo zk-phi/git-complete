@@ -120,9 +120,8 @@ whitespaces.
 
 2. When DELIMITED is non-nil and STR has more close parens than
 open parens, remove all characters outside the unbalanced close
-parens (close parens which do not have matching open parens).
-
-3.Remove all trailing whitespaces."
+parens (close parens which do not have matching open
+parens). Otherwise remove trailing whitespaces."
   (with-temp-buffer
     (save-excursion (insert str))
     (if trim-query
@@ -130,13 +129,13 @@ parens (close parens which do not have matching open parens).
           (goto-char (point-max)))
       (skip-chars-forward "\s\t"))
     (delete-region (point-min) (point))
-    (when delimited
-      (ignore-errors
-        (git-complete--up-list-unsafe)
-        (delete-region (1- (point)) (point-max))))
-    (goto-char (point-max))
-    (skip-chars-backward "\s\t")
-    (delete-region (point) (point-max))
+    (if delimited
+        (ignore-errors
+          (git-complete--up-list-unsafe)
+          (delete-region (1- (point)) (point-max)))
+      (goto-char (point-max))
+      (skip-chars-backward "\s\t")
+      (delete-region (point) (point-max)))
     (buffer-string)))
 
 (defvar-local git-complete--root-dir nil)
