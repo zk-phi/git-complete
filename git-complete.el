@@ -91,6 +91,12 @@ disable multiline completion"
   :type 'number
   :group 'git-complete)
 
+(defcustom git-complete-ignore-case 'dwim
+  "When t, git-complete call git grep with `--ignore-case'
+option. When 'dwim, enable `--ignore-case' only when the query
+has an upcase character. When nil, git-complete does not use
+`--ignore-case'.")
+
 ;; * utilities
 
 (defun git-complete--maphash (fn hash)
@@ -292,8 +298,12 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
   "Get completion candidates with `git grep'."
   (when (<= threshold 1.0)
     (let* ((default-directory (git-complete--root-dir))
-           (command (format "git grep -F -h %s %s"
+           (ignore-case (if git-complete-ignore-case
+                            (string-match "[A-Z]" query)
+                          git-complete-ignore-case))
+           (command (format "git grep -F -h %s %s %s"
                             (if multiline-p "-A1" "")
+                            (if ignore-case "-i" "")
                             (shell-quote-argument query)))
            (lines (split-string (shell-command-to-string command) "\n"))
            lst)
