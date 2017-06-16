@@ -69,22 +69,22 @@ modes."
   :type '(repeat symbol)
   :group 'git-complete)
 
-(defcustom git-complete-line-completion-threshold 0.05
-  "Threshold to filter the results from `git grep'. When 0.01 for
+(defcustom git-complete-line-completion-threshold 0.15
+  "Threshold to filter the results from `git grep'. When 0.15 for
 example, which is the default value, completion cnadidates which
-occupy less than 1% among the grep results are dropped. Set this
+occupy less than 15% among the grep results are dropped. Set this
 variable greater than 1.0 to disable line completion."
   :type 'number
   :group 'git-complete)
 
-(defcustom git-complete-omni-completion-threshold 0.05
+(defcustom git-complete-omni-completion-threshold 0.005
   "Like `git-complete-line-completion-threshold' but used while
 omni completion. Set this variable greater than 1.0 to disable
 omni completion."
   :type 'number
   :group 'git-complete)
 
-(defcustom git-complete-multiline-completion-threshold 0.1
+(defcustom git-complete-multiline-completion-threshold 0.3
   "Like `git-complete-omni-completion-threshold' but used while
 multiline completion. Set this variable greater than 1.0 to
 disable multiline completion"
@@ -298,8 +298,8 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
   "Get completion candidates with `git grep'."
   (when (<= threshold 1.0)
     (let* ((default-directory (git-complete--root-dir))
-           (ignore-case (if git-complete-ignore-case
-                            (string-match "[A-Z]" query)
+           (ignore-case (if (eq git-complete-ignore-case 'dwim)
+                            (not (string-match "[A-Z]" query))
                           git-complete-ignore-case))
            (command (format "git grep -F -h %s %s %s"
                             (if multiline-p "-A1" "")
