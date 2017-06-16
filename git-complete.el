@@ -84,11 +84,23 @@ omni completion."
   :type 'number
   :group 'git-complete)
 
-(defcustom git-complete-multiline-completion-threshold 0.3
+(defcustom git-complete-next-line-completion-threshold 0.3
   "Like `git-complete-omni-completion-threshold' but used while
-multiline completion. Set this variable greater than 1.0 to
-disable multiline completion"
+next-line completion. Set this variable greater than 1.0 to
+disable next-line completion"
   :type 'number
+  :group 'git-complete)
+
+(defcustom git-complete-repeat-line-completion t
+  "When non-nil, do next-line completion again after
+successful (next-)line completions."
+  :type 'boolean
+  :group 'git-complete)
+
+(defcustom git-complete-repeat-omni-completion nil
+  "When non-nil, do omni completion again after successful omni
+completions."
+  :type 'boolean
   :group 'git-complete)
 
 (defcustom git-complete-ignore-case 'dwim
@@ -294,7 +306,7 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
          res)
     (git-complete--filter-candidates-internal trie threshold exact-match)))
 
-(defun git-complete--get-candidates (query threshold whole-line-p multiline-p)
+(defun git-complete--get-candidates (query threshold whole-line-p nextline-p)
   "Get completion candidates with `git grep'."
   (when (<= threshold 1.0)
     (let* ((default-directory (git-complete--root-dir))
@@ -302,17 +314,17 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
                             (not (string-match "[A-Z]" query))
                           git-complete-ignore-case))
            (command (format "git grep -F -h %s %s %s"
-                            (if multiline-p "-A1" "")
+                            (if nextline-p "-A1" "")
                             (if ignore-case "-i" "")
                             (shell-quote-argument query)))
            (lines (split-string (shell-command-to-string command) "\n"))
            lst)
       (while (and lines (cdr lines))
-        (when multiline-p (pop lines))   ; pop the first line
+        (when nextline-p (pop lines))   ; pop the first line
         (let ((str (git-complete--trim-candidate
                     (pop lines) (unless whole-line-p query) (not whole-line-p))))
           (unless (string= "" str) (push str lst)))
-        (when multiline-p (pop lines)))  ; pop "--"
+        (when nextline-p (pop lines)))  ; pop "--"
       (let ((filtered (git-complete--filter-candidates lst threshold whole-line-p)))
         (mapcar (lambda (x) (car x)) (sort filtered (lambda (a b) (> (cdr a) (cdr b)))))))))
 
@@ -324,9 +336,11 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
     kmap)
   "Keymap for git-complete popup menu.")
 
-(defun git-complete--internal (&optional threshold omni-from)
-  (setq threshold (or threshold git-complete-line-completion-threshold))
+(defun git-complete--internal (&optional omni-from)
   (let* ((next-line-p (looking-back "^[\s\t]*"))
+         (threshold (cond (omni-from   git-complete-omni-completion-threshold)
+                          (next-line-p git-complete-next-line-completion-threshold)
+                          (t           git-complete-line-completion-threshold)))
          (query (save-excursion
                   (when next-line-p (forward-line -1) (end-of-line))
                   (git-complete--trim-spaces
@@ -338,8 +352,10 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
                                           :keymap git-complete--popup-menu-keymap)))
              (git-complete--replace-substring
               (if omni-from (point) (point-at-bol)) (point) completion omni-from)
-             (unless omni-from
-               (git-complete--internal git-complete-multiline-completion-threshold))))
+             (when (if omni-from
+                       git-complete-repeat-omni-completion
+                     git-complete-repeat-line-completion)
+               (git-complete--internal))))
           ((not next-line-p)
            (let ((next-from
                   (save-excursion
@@ -351,7 +367,7 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
                           (t
                            (back-to-indentation)
                            (point))))))
-             (if next-from (git-complete--internal git-complete-omni-completion-threshold next-from)
+             (if next-from (git-complete--internal next-from)
                (message "No completions found."))))
           (t
            (message "No completions found.")))))
