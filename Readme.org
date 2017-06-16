@@ -1,34 +1,25 @@
 * git-complete.el
 
-Linewise completion engine powered by =git grep=.
+Yet another completion engine powered by =git grep=
 
-=git grep= を使って頻繁に書く「行」を補完
+=git grep= を使った補完エンジン
 
 ** Description
 
 =git-complete= provides an interactive command which, when invoked,
-scans the current git project with =git grep= and completes the
-current line.
+scans the current git project with =git grep= and suggests rest of the
+line.
 
 This may useful to insert idioms frequently used in the project
 without typing them.
 
 [[screencast.gif]]
 
-----
-
-The main idea is invented by hitode909 in =auto-programming.el=, and
-=git-complete=
-
-- is extended with some more features such as:
-  - grained control of newline insertion
-  - automatic parentheses insertion
-  - conditoinal multiline completion
-
-- is implemented in pure Emacs lisp (does not depends on an external
-  perl script)
-
 *** See also:
+
+The =git grep= idea is taken from =auto-programming.el= by hitode909.
+
+https://github.com/hitode909/emacs-auto-programming
 
 - Atom version: =atom-auto-programming= by the author of
   =auto-programming.el=
@@ -37,23 +28,174 @@ The main idea is invented by hitode909 in =auto-programming.el=, and
 - Vim version: =vim-auto-programming= by haya14busa
   - https://github.com/haya14busa/vim-auto-programming
 
-** Installation
+** Quickstart
+*** Installation
 
-Load this package
-
-: (require 'git-complete)
+#+begin_src emacs-lisp
+  (require 'git-complete)
+#+end_src
 
 and (optionally) bind some keys.
 
-: (global-set-key (kbd "C-x C-x") 'git-complete)
+#+begin_src emacs-lisp
+  (global-set-key (kbd "C-c C-c") 'git-complete)
+#+end_src
 
-** Usage
+*** Usecases
 
-Type something in a buffer, under a git repository
+Open a file under a git repo, and =M-x git-complete=
 
-: SHA
+- after a part of a package name (frequently used in your project)
 
-and =M-x git-complete= completes the rest of the line, if suitable
-one is found in your project.
+  #+begin_src perl
+    SHA
+  #+end_src
+
+  completes the import statement.
+
+  #+begin_src perl
+    use Digest::SHA;
+  #+end_src
+
+- after an class name
+
+  #+begin_src javascript
+    var foo = moment().
+  #+end_src
+
+  suggests method names frequently used in your project.
+
+  #+begin_src javascript
+    var foo = moment().format(
+  #+end_src
+
+  and =M-x git-complete= (again) suggests typical arguments to the
+  method.
+
+  #+begin_src javascript
+    var foo = moment().format("YYYY-MM-DD HH:mm:ss"
+  #+end_src
+
+- after a complete line
+
+  #+begin_src perl
+    use strict;
+  #+end_src
+
+  suggests the next line which usually follows "use strict;" in your
+  project.
+
+  #+begin_src perl
+    use strict;
+    use warnings;
+  #+end_src
+
+** How it works
+
+There are (internally) three completion methods in git-complete.
+
+- line completion
+- next-line completion
+- omni completion
+
+and chosen as follows:
+
+- current line has no characters before the cursor ?
+  - yes -> try "next-line completion"
+  - no -> try "line completion"
+    - line completion failed -> try "omni completion"
+
+Each completion methods works as follows:
+
+*** Line completion
+
+before:
+
+: SHA|                   * consider "|" as the cursor
+
+after:
 
 : use Digest::SHA;
+: |
+
+1. Collect lines containing "SHA" in your git repo, by git grepping
+   with "SHA"
+
+2. Find the lines frequently appears in your repo (>=15% by default:
+   see =git-complete-line-completion-thresohld=) and suggest them
+
+   1. If 2. failed, try "omni completion"
+
+   2. If 2. succeeded and =git-complete-repeat-line-completion= is
+      non-nil, try "next-line completion"
+
+*** Next-line completion
+
+before:
+
+: use strict;
+: |
+
+after:
+
+: use strict;
+: use warnings;
+: |
+
+1. Collect lines which appeard next to "use strict;" in your git repo,
+   by git grepping with "use strict;"
+
+2. Find the lines frequently appears in your repo (>=30% by default:
+   see =git-complete-next-line-completion-threshold=) and suggest them
+
+   1. If 2. succeeded and =git-complete-repeat-line-completion= is
+      non-nil, try "next-line" completion again
+
+*** Omni completion
+
+before:
+
+: var foo = bar(MyClass.|)
+
+after:
+
+: var foo = bar(MyClass.my_awesome_method|)
+
+1. Collect lines wich contains "var foo = bar(MyClass." in your git
+   repo, by git grepping with "var foo = bar(MyClass."
+
+2. Find the longest (described below) common substrings which
+   immediately follows "var foo = bar(MyClass." frequently appears in
+   your git repo (>=0.5% by default: see
+   =git-complete-omni-completion-threshold=) and suggest them
+
+   - "longest" :: if "format()" is found for example, do not suggest
+                  "fo" as the completion candidates
+
+   1. If no such substrings found, shorten the query by 1 symbol
+
+      : "var foo = bar(MyClass." => "foo = bar(MyClass."
+
+      then if the shortened query still have at least 1 symbol, back
+      to step 1. and git grep with the shortened query
+      again. Otherwise completion fails
+
+   2. If completion succeeded and
+      =git-complete-repeat-omni-completion= is non-nil, try "omni
+      completion" again
+
+** Customizations
+
+- =git-complete-enable-autopair= : either git-grep should keep the
+  parenthesis balance during completion
+
+- =git-complete-ignore-case= : either to use =--ignore-case= option or
+  not when git grepping
+
+See "How it works" section for details:
+
+- =git-complete-omni-completion-threshold=
+- =git-complete-line-completion-threshold=
+- =git-complete-next-line-completion-threshold=
+- =git-complete-repeat-line-completion=
+- =git-complete-repeat-omni-completion=

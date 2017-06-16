@@ -1,4 +1,4 @@
-;;; git-complete.el -- Linewise completion engine powered by "git grep"
+t;;; git-complete.el -- Yet another completion engine powered by "git grep"
 
 ;; Copyright (C) 2017- zk_phi
 
@@ -29,8 +29,8 @@
 ;;
 ;;   ::SHA
 ;;
-;; then `M-x git-completion` completes rest of the line, if suitable
-;; one is found in your git repo.
+;; then `M-x git-completion` suggests rest of the line by git-grepping
+;; your repo.
 ;;
 ;;   use Digest::SHA qw/sha1_base64/;
 ;;
@@ -48,7 +48,7 @@
 (require 'cl-lib)
 
 (defgroup git-complete nil
-  "Complete lines via git-grep results."
+  "Yet another completion engine powered by \"git grep\"."
   :group 'git-complete)
 
 (defcustom git-complete-enable-autopair t
