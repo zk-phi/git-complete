@@ -61,43 +61,47 @@ and (optionally) bind some keys.
 
 *** Examples
 
+(Consider "|" as the cursor in following examples)
+
 Open a file under a git repo, and =M-x git-complete=
 
 - after a part of a package name (frequently used in your project)
 
   #+begin_src perl
-    SHA
+    SHA|
   #+end_src
 
   completes the import statement.
 
   #+begin_src perl
     use Digest::SHA;
+    |
   #+end_src
 
-- after an class name
+- after a constructor
 
   #+begin_src javascript
-    var foo = moment().
+    var foo = moment().|
   #+end_src
 
   suggests method names frequently used in your project.
 
   #+begin_src javascript
-    var foo = moment().format(
+    var foo = moment().format(|
   #+end_src
 
   and =M-x git-complete= (again) suggests typical arguments to the
-  method.
+  method frequently used in your project.
 
   #+begin_src javascript
-    var foo = moment().format("YYYY-MM-DD HH:mm:ss"
+    var foo = moment().format("YYYY-MM-DD HH:mm:ss"|
   #+end_src
 
 - after a complete line
 
   #+begin_src perl
     use strict;
+    |
   #+end_src
 
   suggests the next line which usually follows "use strict;" in your
@@ -106,6 +110,7 @@ Open a file under a git repo, and =M-x git-complete=
   #+begin_src perl
     use strict;
     use warnings;
+    |
   #+end_src
 
 ** Customizations
@@ -204,7 +209,7 @@ after:
    =git-complete-omni-completion-threshold=) and suggest them
 
    - "longest" :: if "format()" is found, for example, do not suggest
-                  "fo" as the completion candidates
+                  "fo" as a completion candidate
 
    1. If no such substrings found, shorten the query by 1 symbol
 
@@ -223,7 +228,7 @@ after:
 When =git-grep-enable-autopair= is non-nil, the parenthesis balance is
 always kept during completion.
 
-*** Line completion
+*** (Next-)line completion
 
 - Open paren
 
@@ -249,32 +254,39 @@ always kept during completion.
   parens:
 
   : query:
-  : my_awesome_function(|
+  : my_awesome_function(
+  :   |
   : )
 
   : completion:
-  : my_awesome_function(an_awesome_argument)
+  : an_awesome_argument)
 
   then the close parens in the next line is mereged into the
   replacement :
 
   : result:
-  : my_awesome_function(an_awesome_argument);
+  : my_awesome_function(
+  :   an_awesome_argument)
+  : |
 
   If no such close paren exist in the next line, then open parens are
   inserted at the beginning of the replacement, instead.
 
   : query:
-  : my_awesome_function(|
-  :   foo
+  : my_awesome_function(
+  :   |
+  :   another_awesome_argument
   : );
 
   : result:
-  : (my_awesome_function(an_awesome_argument)
+  : my_awesome_function(
+  :   (an_awesome_argument)
+  :   |
   :   foo
   : );
 
-  (I'm not sure this behavior is very useful ... but just to keep the balance)
+  (I'm not sure this behavior is very useful ... but just to keep the
+  balance. maybe improved in the future versions ... ?)
 
 *** Omni completion
 
@@ -284,7 +296,7 @@ always kept during completion.
   parens:
 
   : query:
-  : var formatted = moment.format|         * consider | as the cursor
+  : var formatted = moment.format|
 
   : completion:
   : ("YYYY-MM-DD HH:mm:ss",
@@ -293,7 +305,7 @@ always kept during completion.
   unlike line completion).
 
   : result:
-  : var formatted = moment.format("YYYY-MM-DD HH:mm:ss", |)
+  : var formatted = moment.format("YYYY-MM-DD HH:mm:ss",|)
 
 - Close paren
 
@@ -306,8 +318,8 @@ always kept during completion.
   : completion:
   : an_awesome_argument), bra, bra, bra
 
-  then the close paren and characters outside the paren are dropped
-  from completion:
+  then the close paren and characters outside the paren (=bra, bra,
+  bra=) are dropped from the completion:
 
   : result:
   : var foo = my_awesome_function(an_awesome_argument|)
