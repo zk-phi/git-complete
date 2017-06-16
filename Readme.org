@@ -15,6 +15,24 @@ without typing them.
 
 [[screencast.gif]]
 
+Pros.
+
+- git-complete completes not just a symbol but the whole idiom
+  (somewhat like snippet engines), unlike other completion engines
+
+- Works without any configurations per language, unlike snpipet
+  engines
+
+Cons.
+
+- Projects need to be version-controlled under the git
+
+- Laggy than other snippet/completion engines since git-complete greps
+  over the git repo (especially the first invokation in the project)
+
+- Less accurate than a well configured snippet engine in popular
+  languages
+
 *** See also:
 
 The =git grep= idea is taken from =auto-programming.el= by hitode909.
@@ -41,7 +59,7 @@ and (optionally) bind some keys.
   (global-set-key (kbd "C-c C-c") 'git-complete)
 #+end_src
 
-*** Usecases
+*** Examples
 
 Open a file under a git repo, and =M-x git-complete=
 
@@ -89,6 +107,22 @@ Open a file under a git repo, and =M-x git-complete=
     use strict;
     use warnings;
   #+end_src
+
+** Customizations
+
+- =git-complete-enable-autopair= : either git-complete should keep the
+  parenthesis balance during completion
+
+- =git-complete-ignore-case= : either to use =--ignore-case= option or
+  not when git grepping
+
+See "How it works" section for details:
+
+- =git-complete-omni-completion-threshold=
+- =git-complete-line-completion-threshold=
+- =git-complete-next-line-completion-threshold=
+- =git-complete-repeat-line-completion=
+- =git-complete-repeat-omni-completion=
 
 ** How it works
 
@@ -161,41 +195,119 @@ after:
 
 : var foo = bar(MyClass.my_awesome_method|)
 
-1. Collect lines wich contains "var foo = bar(MyClass." in your git
+1. Collect lines which contains "var foo = bar(MyClass." in your git
    repo, by git grepping with "var foo = bar(MyClass."
 
 2. Find the longest (described below) common substrings which
-   immediately follows "var foo = bar(MyClass." frequently appears in
-   your git repo (>=0.5% by default: see
+   immediately follows "var foo = bar(MyClass." and frequently appears
+   in your git repo (>=0.5% by default: see
    =git-complete-omni-completion-threshold=) and suggest them
 
-   - "longest" :: if "format()" is found for example, do not suggest
+   - "longest" :: if "format()" is found, for example, do not suggest
                   "fo" as the completion candidates
 
    1. If no such substrings found, shorten the query by 1 symbol
 
       : "var foo = bar(MyClass." => "foo = bar(MyClass."
 
-      then if the shortened query still have at least 1 symbol, back
-      to step 1. and git grep with the shortened query
-      again. Otherwise completion fails
+      and if the shortened query still have at least 1 symbol, git
+      grep with the shortened query again (repeat this until all
+      symbols in the query are dropped). Otherwise completion fails.
 
    2. If completion succeeded and
       =git-complete-repeat-omni-completion= is non-nil, try "omni
       completion" again
 
-** Customizations
+** "autopair" feature
 
-- =git-complete-enable-autopair= : either git-complete should keep the
-  parenthesis balance during completion
+When =git-grep-enable-autopair= is non-nil, the parenthesis balance is
+always kept during completion.
 
-- =git-complete-ignore-case= : either to use =--ignore-case= option or
-  not when git grepping
+*** Line completion
 
-See "How it works" section for details:
+- Open paren
 
-- =git-complete-omni-completion-threshold=
-- =git-complete-line-completion-threshold=
-- =git-complete-next-line-completion-threshold=
-- =git-complete-repeat-line-completion=
-- =git-complete-repeat-omni-completion=
+  If the completion being inserted has more *open* parens than close
+  parens:
+
+  : query:
+  : validate|            * consider | as the cursor
+
+  : completion:
+  : my %params = Params::Validate::validate(@_, {
+
+  then close parens (and an empty line) are inserted automatically.
+
+  : result:
+  : my %params = Params::Validate::validate(@_, {
+  :     |
+  : })
+
+- Close paren
+
+  If the completion being inserted has more *close* parens than open
+  parens:
+
+  : query:
+  : my_awesome_function(|
+  : )
+
+  : completion:
+  : my_awesome_function(an_awesome_argument)
+
+  then the close parens in the next line is mereged into the
+  replacement :
+
+  : result:
+  : my_awesome_function(an_awesome_argument);
+
+  If no such close paren exist in the next line, then open parens are
+  inserted at the beginning of the replacement, instead.
+
+  : query:
+  : my_awesome_function(|
+  :   foo
+  : );
+
+  : result:
+  : (my_awesome_function(an_awesome_argument)
+  :   foo
+  : );
+
+  (I'm not sure this behavior is very useful ... but just to keep the balance)
+
+*** Omni completion
+
+- Open paren
+
+  If the completion being inserted has more *open* parens than close
+  parens:
+
+  : query:
+  : var formatted = moment.format|         * consider | as the cursor
+
+  : completion:
+  : ("YYYY-MM-DD HH:mm:ss",
+
+  then close parens are inserted automatically (without an empty line,
+  unlike line completion).
+
+  : result:
+  : var formatted = moment.format("YYYY-MM-DD HH:mm:ss", |)
+
+- Close paren
+
+  If the completion being inserted has more *close* parens than open
+  parens:
+
+  : query:
+  : var foo = my_awesome_function(|)
+
+  : completion:
+  : an_awesome_argument), bra, bra, bra
+
+  then the close paren and characters outside the paren are dropped
+  from completion:
+
+  : result:
+  : var foo = my_awesome_function(an_awesome_argument|)
