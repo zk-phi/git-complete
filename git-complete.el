@@ -69,10 +69,10 @@ modes."
   :type '(repeat symbol)
   :group 'git-complete)
 
-(defcustom git-complete-line-completion-threshold 0.15
-  "Threshold to filter the results from `git grep'. When 0.15 for
+(defcustom git-complete-line-completion-threshold 0.02
+  "Threshold to filter the results from `git grep'. When 0.02 for
 example, which is the default value, completion cnadidates which
-occupy less than 15% among the grep results are dropped. Set this
+occupy less than 2% among the grep results are dropped. Set this
 variable greater than 1.0 to disable line completion."
   :type 'number
   :group 'git-complete)

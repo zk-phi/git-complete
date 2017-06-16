@@ -121,7 +121,7 @@ after:
 1. Collect lines containing "SHA" in your git repo, by git grepping
    with "SHA"
 
-2. Find the lines frequently appears in your repo (>=15% by default:
+2. Find the lines frequently appears in your repo (>=2% by default:
    see =git-complete-line-completion-thresohld=) and suggest them
 
    1. If 2. failed, try "omni completion"
