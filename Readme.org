@@ -142,8 +142,8 @@ after:
 : use warnings;
 : |
 
-1. Collect lines which appeard next to "use strict;" in your git repo,
-   by git grepping with "use strict;"
+1. Collect lines next to "use strict;" in your git repo, by git
+   grepping with "use strict;"
 
 2. Find the lines frequently appears in your repo (>=30% by default:
    see =git-complete-next-line-completion-threshold=) and suggest them
@@ -186,7 +186,7 @@ after:
 
 ** Customizations
 
-- =git-complete-enable-autopair= : either git-grep should keep the
+- =git-complete-enable-autopair= : either git-complete should keep the
   parenthesis balance during completion
 
 - =git-complete-ignore-case= : either to use =--ignore-case= option or
