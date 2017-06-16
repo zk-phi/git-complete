@@ -345,7 +345,7 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
                   (when next-line-p (forward-line -1) (end-of-line))
                   (git-complete--trim-spaces
                    (buffer-substring (or omni-from (point-at-bol)) (point)) t (null omni-from))))
-         (candidates (when (not (string= query ""))
+         (candidates (when (string-match "\\_>" query)
                        (git-complete--get-candidates query threshold (null omni-from) next-line-p))))
     (cond (candidates
            (let ((completion (popup-menu* candidates :scroll-bar t :isearch t
