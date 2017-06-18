@@ -107,7 +107,10 @@ completions."
   "When t, git-complete call git grep with `--ignore-case'
 option. When 'dwim, enable `--ignore-case' only when the query
 has an upcase character. When nil, git-complete does not use
-`--ignore-case'.")
+`--ignore-case'."
+  :type 'symbol
+  :group 'git-complete)
+
 
 ;; * utilities
 
