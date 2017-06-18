@@ -111,6 +111,22 @@ has an upcase character. When nil, git-complete does not use
   :type 'symbol
   :group 'git-complete)
 
+(defcustom git-complete-limit-extension nil
+  "When non-nil, candidates are limited to files with the same
+extension as the current buffer."
+  :type 'boolean
+  :group 'git-complete)
+
+(defcustom git-complete-major-mode-extensions-alist
+  '((c-mode "c" "h")
+    (cperl-mode "pl" "pm" "t"))
+  "Alist of major-mode vs list of extensions. If
+`git-complete-limit-extension' is non-nil and the current
+major-mode has an entry in this alist, limit candidates to files
+with matching extensions *listed in the alist*, instead of the
+current file's extension."
+  :type 'sexp
+  :group 'git-complete)
 
 ;; * utilities
 
@@ -169,6 +185,16 @@ caches the result per buffer."
             (cond ((null buffer-file-name) default-directory)
                   ((locate-dominating-file buffer-file-name ".git"))
                   (t (error "Not under a git repository."))))))
+
+(defvar-local git-complete--extensions nil)
+(defun git-complete--extensions ()
+  "Returns a list of extensions to which candidates should be
+limited."
+  (and git-complete-limit-extension
+       (or git-complete--extensions
+           (setq git-complete--extensions
+                 (or (assoc-default major-mode git-complete-major-mode-extensions-alist)
+                     (list (file-name-extension buffer-file-name)))))))
 
 ;; * smart string substitution
 
@@ -316,10 +342,14 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
            (ignore-case (if (eq git-complete-ignore-case 'dwim)
                             (not (string-match "[A-Z]" query))
                           git-complete-ignore-case))
-           (command (format "git grep -F -h %s %s %s"
+           (extensions (git-complete--extensions))
+           (command (format "git grep -F -h %s %s %s -- %s"
                             (if nextline-p "-A1" "")
                             (if ignore-case "-i" "")
-                            (shell-quote-argument query)))
+                            (shell-quote-argument query)
+                            (if extensions
+                                (mapconcat (lambda (ext) (concat "*." ext)) extensions " ")
+                              "*")))
            (lines (split-string (shell-command-to-string command) "\n"))
            lst)
       (while (and lines (cdr lines))
