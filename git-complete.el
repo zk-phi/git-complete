@@ -348,7 +348,7 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
                             (if ignore-case "-i" "")
                             (shell-quote-argument query)
                             (if extensions
-                                (mapconcat (lambda (ext) (concat "*." ext)) extensions " ")
+                                (mapconcat (lambda (ext) (concat "\"*." ext "\"")) extensions " ")
                               "*")))
            (lines (split-string (shell-command-to-string command) "\n"))
            lst)
