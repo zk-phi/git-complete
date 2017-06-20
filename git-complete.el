@@ -113,7 +113,8 @@ has an upcase character. When nil, git-complete does not use
 
 (defcustom git-complete-limit-extension nil
   "When non-nil, candidates are limited to files with the same
-extension as the current buffer."
+extension as the current buffer. See also:
+`git-complete-major-mode-extensions-alist'."
   :type 'boolean
   :group 'git-complete)
 

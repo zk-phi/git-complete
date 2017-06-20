@@ -7,31 +7,44 @@ Yet another completion engine powered by =git grep=
 ** Description
 
 =git-complete= provides an interactive command which, when invoked,
-scans the current git project with =git grep= and suggests rest of the
-line.
-
-This may useful to insert idioms frequently used in the project
-without typing them.
+scans the current git project with =git grep= and suggests what you
+may want to insert.
 
 [[screencast.gif]]
 
-Pros.
+=git-complete= CAN:
 
-- git-complete completes not just a symbol but the whole idiom
-  (somewhat like snippet engines), unlike other completion engines
+- complete *not just a symbol but the whole idiom* if appropreate,
+  unlike other completion engines (rather like snippet engines)
 
-- Works without any configurations per language, unlike snpipet
-  engines
+- be used as an "omni (smart) completion" engine, i.e. =git-complete=
+  tries to suggest expressions you may want to insert next, *even when
+  you don't remember it*, by grepping your project (class methods
+  after a class name, typical argument for a function, for examples)
 
-Cons.
+- be used with *no per-language configurations or dictionaries*,
+  unlike snippet engines or omni-completion engines
 
-- Projects need to be version-controlled under the git
+=git-complete= CAN'T:
 
-- Laggy than other snippet/completion engines since git-complete greps
-  over the git repo (especially the first invokation in the project)
+- complete expressions which has not been used in the git project yet
 
-- Less accurate than a well configured snippet engine in popular
-  languages
+- start completion automatically, since it's a bit laggy to git grep
+  over the git repo (especially for the first invokation in the
+  project)
+
+- be 100% accurately complete, since =git-complete= has no knowledges
+  about the language you are coding in
+
+EXTRA FEATURES:
+
+- "autopair"
+  - =git-complete= (optionally) tries to keep the parenthesis balance
+    by inserting or deleting some parens if appropreate
+
+- DWIM newline insertion
+  - =git-complete= tries to insert newline after completion if you may
+    want so
 
 *** See also:
 
