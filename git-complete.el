@@ -118,6 +118,12 @@ extension as the current buffer. See also:
   :type 'boolean
   :group 'git-complete)
 
+(defcustom git-complete-fallback-function nil
+  "When a function is set, the function is called if completion
+fails."
+  :type 'function
+  :group 'git-complete)
+
 (defcustom git-complete-major-mode-extensions-alist
   '((c-mode "c" "h")
     (cperl-mode "pl" "pm" "t"))
@@ -336,7 +342,7 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
 
 (defun git-complete--get-candidates (query threshold whole-line-p nextline-p)
   "Get completion candidates with `git grep'."
-  (when (<= threshold 1.0)
+  (when (and (git-complete--root-dir) (<= threshold 1.0))
     (let* ((default-directory (git-complete--root-dir))
            (ignore-case (if (eq git-complete-ignore-case 'dwim)
                             (not (string-match "[A-Z]" query))
@@ -399,8 +405,14 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
                           (t
                            (back-to-indentation)
                            (point))))))
-             (if next-from (git-complete--internal next-from)
-               (message "No completions found."))))
+             (cond (next-from
+                    (git-complete--internal next-from))
+                   (git-complete-fallback-function
+                    (funcall git-complete-fallback-function))
+                   (t
+                    (message "No completions found.")))))
+          (git-complete-fallback-function
+           (funcall git-complete-fallback-function))
           (t
            (message "No completions found.")))))
 
