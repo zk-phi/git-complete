@@ -183,9 +183,7 @@ directory is not under a git repo, raises an error. This function
 caches the result per buffer."
   (or git-complete--root-dir
       (setq git-complete--root-dir
-            (cond ((null buffer-file-name) default-directory)
-                  ((locate-dominating-file buffer-file-name ".git"))
-                  (t (error "Not under a git repository."))))))
+            (and buffer-file-name (locate-dominating-file buffer-file-name ".git")))))
 
 (defvar-local git-complete--extensions nil)
 (defun git-complete--extensions ()
