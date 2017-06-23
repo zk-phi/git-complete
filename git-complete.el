@@ -135,6 +135,12 @@ current file's extension."
   :type 'sexp
   :group 'git-complete)
 
+(defcustom git-complete-omni-completion-granularity 'subword
+  "Specifies how to shorten query while omni-completion. Can be
+either 'symbol, 'word or 'subword."
+  :type 'symbol
+  :group 'git-complete)
+
 ;; * utilities
 
 (defun git-complete--maphash (fn hash)
@@ -374,7 +380,21 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
     kmap)
   "Keymap for git-complete popup menu.")
 
+(defun git-complete--find-next-start (&optional current-start)
+  "Returns next query start or nil."
+  (save-excursion
+    (let ((lim (point))
+          (case-fold-search nil))
+      (goto-char (or current-start (point-at-bol)))
+      (cl-case git-complete-omni-completion-granularity
+        ((symbol)  (and (search-forward-regexp ".\\_<" lim t) (point)))
+        ((word)    (and (search-forward-regexp ".\\<" lim t) (point)))
+        ((subword) (and (search-forward-regexp ".\\<\\|[a-zA-Z]\\([A-Z]\\)[a-z]" lim t)
+                        (or (match-beginning 1) (point))))
+        (t (error "invalid `git-complete-omni-completion-granularity'."))))))
+
 (defun git-complete--internal (&optional omni-from)
+  "Internal recursive function for git-complete."
   (let* ((next-line-p (looking-back "^[\s\t]*"))
          (threshold (cond (omni-from   git-complete-omni-completion-threshold)
                           (next-line-p git-complete-next-line-completion-threshold)
@@ -397,14 +417,8 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
           ((not next-line-p)
            (let ((next-from
                   (save-excursion
-                    (cond (omni-from
-                           (when (search-forward-regexp
-                                  ".\\_<"
-                                  (prog1 (point) (goto-char (or omni-from (point-at-bol)))) t)
-                             (point)))
-                          (t
-                           (back-to-indentation)
-                           (point))))))
+                    (cond (omni-from (git-complete--find-next-start omni-from))
+                          (t (back-to-indentation) (point))))))
              (cond (next-from
                     (git-complete--internal next-from))
                    (git-complete-fallback-function
