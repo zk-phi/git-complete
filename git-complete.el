@@ -23,13 +23,13 @@
 
 ;; Load this script
 ;;
-;;   (require 'git-completion)
+;;   (require 'git-complete)
 ;;
 ;; and type something in a file under a git repo
 ;;
 ;;   ::SHA
 ;;
-;; then `M-x git-completion` suggests rest of the line by git-grepping
+;; then `M-x git-complete` suggests rest of the line by git-grepping
 ;; your repo.
 ;;
 ;;   use Digest::SHA qw/sha1_base64/;
