@@ -33,7 +33,7 @@ may want to insert.
   over the git repo (especially for the first invokation in the
   project)
 
-- be 100% accurate, since =git-complete= has no knowledges about the
+- be 100% accurate, since =git-complete= has no knowledge about the
   language you are coding in
 
 EXTRA FEATURES:
@@ -174,7 +174,7 @@ after:
    with "SHA"
 
 2. Find the lines frequently appears in your repo (>=2% by default:
-   see =git-complete-line-completion-thresohld=) and suggest them
+   see =git-complete-line-completion-threshold=) and suggest them
 
    1. If 2. failed, try "omni completion"
 
