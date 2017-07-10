@@ -413,7 +413,8 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
              (when (if omni-from
                        git-complete-repeat-omni-completion
                      git-complete-repeat-line-completion)
-               (git-complete--internal))))
+               (let ((git-complete-fallback-function nil))
+                 (git-complete--internal)))))
           ((not next-line-p)
            (let ((next-from
                   (save-excursion
