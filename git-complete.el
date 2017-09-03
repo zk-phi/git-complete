@@ -1,4 +1,4 @@
-;;; git-complete.el -- Yet another completion engine powered by "git grep"
+;;; git-complete.el --- Yet another completion engine powered by "git grep"
 
 ;; Copyright (C) 2017- zk_phi
 
