@@ -141,6 +141,12 @@ either 'symbol, 'word or 'subword."
   :type 'symbol
   :group 'git-complete)
 
+(defcustom git-complete-enable-isearch t
+  "When non-nil, enable isearch by default on selecting completion
+candidate."
+  :type 'boolean
+  :group 'git-complete)
+
 ;; * utilities
 
 (defun git-complete--maphash (fn hash)
@@ -406,7 +412,8 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
          (candidates (when (string-match "\\_>" query)
                        (git-complete--get-candidates query threshold (null omni-from) next-line-p))))
     (cond (candidates
-           (let ((completion (popup-menu* candidates :scroll-bar t :isearch t
+           (let ((completion (popup-menu* candidates :scroll-bar t
+                                          :isearch git-complete-enable-isearch
                                           :keymap git-complete--popup-menu-keymap)))
              (git-complete--replace-substring
               (if omni-from (point) (point-at-bol)) (point) completion omni-from)
