@@ -194,7 +194,7 @@ parens). Otherwise remove trailing whitespaces."
       (delete-region (point) (point-max)))
     (buffer-string)))
 
-(defvar-local git-complete--root-dir nil)
+(defvar-local git-complete--root-dir nil) ; cache
 (defun git-complete--root-dir ()
   "Find the root directory of this git repo. If the current
 directory is not under a git repo, raises an error. This function
@@ -203,7 +203,7 @@ caches the result per buffer."
       (setq git-complete--root-dir
             (and buffer-file-name (locate-dominating-file buffer-file-name ".git")))))
 
-(defvar-local git-complete--extensions nil)
+(defvar-local git-complete--extensions nil) ; cache
 (defun git-complete--extensions ()
   "Returns a list of extensions to which candidates should be
 limited."
@@ -218,7 +218,13 @@ limited."
 (defun git-complete--parse-parens (str)
   "Internal function for `git-complete--replace-substring'. Parse
 str and returns unbalanced parens in the form (((EXTRA_OPEN
-. EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE . EXPECTED_OPEN) ...))."
+. EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE . EXPECTED_OPEN) ...)).
+
+Example:
+- ()    => (nil . nil) since parens are balanced
+- f(o)o => (nil . nil) non-paren characters does not affects the result
+- [     => (((?\[ . ?\])) . nil) since we have an extra \"[\"
+- [}    => (((?\[ . ?\])) . ((?\} . ?\{))) since we have another extra \"}\""
   (let (opens closes syntax char)
     (with-temp-buffer
       (save-excursion (insert str))
@@ -240,7 +246,14 @@ str and returns unbalanced parens in the form (((EXTRA_OPEN
 (defun git-complete--diff-parens (lst1 lst2)
   "Internal function for
 `git-complete--replace-substring'. Compute difference of two
-results of `git-complete--parse-parens'."
+results of `git-complete--parse-parens'.
+
+Example:
+- (git-complete--diff-parens
+   (git-complete--parse-parens \"(\")
+   (git-complete--parse-parens \"}\")) => (nil . ((?\} . ?\{) (?\) . ?\()))
+When replacing \"(\" with \"}\", we need an extra \"{\" and a
+\"(\", to keep the balance."
   (let ((existing-opens (car lst1))
         (added-opens (car lst2))
         (existing-closes (cdr lst1))
@@ -304,8 +317,8 @@ inserted."
 ;; * get candidates via git grep
 
 (defun git-complete--make-hist-trie (lst-of-lst)
-  "Internal function for `git-complete--filter-candidates'. Make
-a trie-like tree from a List[List[String]], whose nodes
+  "Internal function for `git-complete--filter-candidates'. Takes
+a List[List[String]], and makes a trie-like tree, whose nodes
 are (CHILDREN . COUNT) where CHILDREN is a hash map of String ->
 Node. Last element in each List[String] is expected to be an
 empty string."
@@ -325,7 +338,7 @@ empty string."
     trie))
 
 (defun git-complete--filter-candidates-internal (trie threshold exact-match &optional node-key)
-  "Internal function for
+  "Internal recursive function for
 `git-complete--filter-candidates'. Traverse a trie returned by
 `git-complete--make-hist-trie' and finds list of \"suitable\"
 completion candidates. Optional arg NODE-KEY is used internally."
@@ -343,7 +356,7 @@ completion candidates. Optional arg NODE-KEY is used internally."
              (list (cons node-key (cdr trie))))))))
 
 (defun git-complete--filter-candidates (lst threshold exact-match)
-  "Internal function for `git-complete--get-candidates'. Extract
+  "Internal function for `git-complete--get-query-candidates'. Extract
 a list of \"suitable\" completion candidates of the form (STRING
 . COUNT) from a string list LST, according to THRESHOLD. Unless
 EXACT-MATCH is non-nil, substrings may also can be cnadidates."
@@ -353,7 +366,9 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
     (git-complete--filter-candidates-internal trie threshold exact-match)))
 
 (defun git-complete--get-candidates (query threshold whole-line-p nextline-p)
-  "Get completion candidates with `git grep'."
+  "Get completion candidates. This function calls `git grep'
+command to get lines matching QUERY, then filteres with
+`git-complete--filter-candidates'."
   (when (and (git-complete--root-dir) (<= threshold 1.0))
     (let* ((default-directory (git-complete--root-dir))
            (ignore-case (if (eq git-complete-ignore-case 'dwim)
