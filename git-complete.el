@@ -213,6 +213,21 @@ limited."
                  (or (assoc-default major-mode git-complete-major-mode-extensions-alist)
                      (list (file-name-extension buffer-file-name)))))))
 
+(defun git-complete--beginning-of-next-word (&optional current-start)
+  "Returns the beginning position of next word (according to
+git-complete-omni-completion-granularity) in the line, or nil if
+not found."
+  (save-excursion
+    (let ((lim (point))
+          (case-fold-search nil))
+      (goto-char (or current-start (point-at-bol)))
+      (cl-case git-complete-omni-completion-granularity
+        ((symbol)  (and (search-forward-regexp ".\\_<" lim t) (point)))
+        ((word)    (and (search-forward-regexp ".\\<" lim t) (point)))
+        ((subword) (and (search-forward-regexp ".\\<\\|[a-zA-Z]\\([A-Z]\\)[a-z]" lim t)
+                        (or (match-beginning 1) (point))))
+        (t (error "invalid `git-complete-omni-completion-granularity'."))))))
+
 ;; * smart string substitution
 
 (defun git-complete--parse-parens (str)
@@ -365,7 +380,7 @@ EXACT-MATCH is non-nil, substrings may also can be cnadidates."
          res)
     (git-complete--filter-candidates-internal trie threshold exact-match)))
 
-(defun git-complete--get-candidates (query threshold whole-line-p nextline-p)
+(defun git-complete--get-query-candidates (query threshold whole-line-p nextline-p)
   "Get completion candidates. This function calls `git grep'
 command to get lines matching QUERY, then filteres with
 `git-complete--filter-candidates'."
@@ -401,19 +416,6 @@ command to get lines matching QUERY, then filteres with
     kmap)
   "Keymap for git-complete popup menu.")
 
-(defun git-complete--find-next-start (&optional current-start)
-  "Returns next query start or nil."
-  (save-excursion
-    (let ((lim (point))
-          (case-fold-search nil))
-      (goto-char (or current-start (point-at-bol)))
-      (cl-case git-complete-omni-completion-granularity
-        ((symbol)  (and (search-forward-regexp ".\\_<" lim t) (point)))
-        ((word)    (and (search-forward-regexp ".\\<" lim t) (point)))
-        ((subword) (and (search-forward-regexp ".\\<\\|[a-zA-Z]\\([A-Z]\\)[a-z]" lim t)
-                        (or (match-beginning 1) (point))))
-        (t (error "invalid `git-complete-omni-completion-granularity'."))))))
-
 (defun git-complete--internal (&optional omni-from)
   "Internal recursive function for git-complete."
   (let* ((next-line-p (looking-back "^[\s\t]*"))
@@ -425,7 +427,8 @@ command to get lines matching QUERY, then filteres with
                   (git-complete--trim-spaces
                    (buffer-substring (or omni-from (point-at-bol)) (point)) t (null omni-from))))
          (candidates (when (string-match "\\_>" query)
-                       (git-complete--get-candidates query threshold (null omni-from) next-line-p))))
+                       (git-complete--get-query-candidates
+                        query threshold (null omni-from) next-line-p))))
     (cond (candidates
            (let ((completion (popup-menu* candidates :scroll-bar t
                                           :isearch git-complete-enable-isearch
@@ -440,7 +443,7 @@ command to get lines matching QUERY, then filteres with
           ((not next-line-p)
            (let ((next-from
                   (save-excursion
-                    (cond (omni-from (git-complete--find-next-start omni-from))
+                    (cond (omni-from (git-complete--beginning-of-next-word omni-from))
                           (t (back-to-indentation) (point))))))
              (cond (next-from
                     (git-complete--internal next-from))
