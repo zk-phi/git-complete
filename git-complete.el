@@ -324,6 +324,12 @@ empty string."
                (setq current-node child-node)))))
     trie))
 
+(defun git-complete--dump-trie (trie)
+  "FOR DEBUG USE."
+  (let ((res nil))
+    (maphash (lambda (k v) (push (cons k (git-complete--dump-trie v)) res)) (car trie))
+    (cons (cdr trie) res)))
+
 (defun git-complete--filter-candidates-internal (trie threshold exact-match &optional node-key)
   "Internal function for
 `git-complete--filter-candidates'. Traverse a trie returned by
