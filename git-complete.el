@@ -213,7 +213,7 @@ limited."
                  (or (assoc-default major-mode git-complete-major-mode-extensions-alist)
                      (list (file-name-extension buffer-file-name)))))))
 
-(defun git-complete--beginning-of-next-word (&optional current-start)
+(defun git-complete--beginning-of-next-word (current-start)
   "Returns the beginning position of next word (according to
 git-complete-omni-completion-granularity) in the line, or nil if
 not found."
