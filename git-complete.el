@@ -40,7 +40,7 @@
 
 ;;; Change Log:
 
-;; 0.0.0 text release
+;; 0.0.0 test release
 
 ;;; Code:
 
