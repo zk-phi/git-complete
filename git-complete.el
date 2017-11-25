@@ -18,7 +18,7 @@
 
 ;; Author: zk_phi
 ;; URL: http://hins11.yu-yake.com/
-;; Version: 0.0.0
+;; Version: 0.0.1
 ;; Package-Requires: ((popup "0.4"))
 
 ;; Load this script
@@ -41,6 +41,7 @@
 ;;; Change Log:
 
 ;; 0.0.0 test release
+;; 0.0.1 add option git-complete-repeat-completion
 
 ;;; Code:
 
@@ -91,16 +92,11 @@ disable next-line completion"
   :type 'number
   :group 'git-complete)
 
-(defcustom git-complete-repeat-line-completion t
-  "When non-nil, do next-line completion again after
-successful (next-)line completions."
-  :type 'boolean
-  :group 'git-complete)
-
-(defcustom git-complete-repeat-omni-completion nil
-  "When non-nil, do omni completion again after successful omni
-completions."
-  :type 'boolean
+(defcustom git-complete-repeat-completion 'newline
+  "When nil, do not repeat completion after successful
+completions. When `newline', repeat completion only after a
+newline. Otherwise always repeat completion."
+  :type 'symbol
   :group 'git-complete)
 
 (defcustom git-complete-ignore-case 'dwim
@@ -146,6 +142,11 @@ either 'symbol, 'word or 'subword."
 candidate."
   :type 'boolean
   :group 'git-complete)
+
+(defvar git-complete-repeat-line-completion nil)
+(defvar git-complete-repeat-omni-completion nil)
+(make-obsolete-variable 'git-complete-repeat-line-completion 'git-complete-repeat-completion "0.0.1")
+(make-obsolete-variable 'git-complete-repeat-omni-completion 'git-complete-repeat-completion "0.0.1")
 
 ;; * utilities
 
@@ -435,9 +436,12 @@ command to get lines matching QUERY, then filteres with
                                           :keymap git-complete--popup-menu-keymap)))
              (git-complete--replace-substring
               (if omni-from (point) (point-at-bol)) (point) completion omni-from)
-             (when (if omni-from
-                       git-complete-repeat-omni-completion
-                     git-complete-repeat-line-completion)
+             (when (or (if omni-from
+                           git-complete-repeat-omni-completion
+                         git-complete-repeat-line-completion) ; backward compatiblity
+                       (if (eq git-complete-repeat-completion 'newline)
+                           (looking-back "^[\s\t]*")
+                         git-complete-repeat-completion))
                (let ((git-complete-fallback-function nil))
                  (git-complete--internal)))))
           ((not next-line-p)
