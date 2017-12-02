@@ -353,7 +353,7 @@ empty string."
                (setq current-node child-node)))))
     trie))
 
-(defun git-complete--filter-candidates-internal (trie threshold exact-match &optional node-key)
+(defun git-complete--filter-candidates-internal (trie threshold &optional node-key)
   "Internal recursive function for
 `git-complete--filter-candidates'. Traverse a trie returned by
 `git-complete--make-hist-trie' and finds list of \"suitable\"
@@ -363,29 +363,36 @@ completion candidates. Optional arg NODE-KEY is used internally."
            (apply 'nconc
                   (git-complete--maphash
                    (lambda (k v)
-                     (funcall 'git-complete--filter-candidates-internal v threshold exact-match k))
+                     (funcall 'git-complete--filter-candidates-internal v threshold k))
                    (car trie)))))
       (cond (children
              (mapcar (lambda (x) (cons (if node-key (concat node-key (car x)) (car x)) (cdr x)))
                      children))
-            ((and node-key (or (not exact-match) (string= node-key "")))
-             (list (cons node-key (cdr trie))))))))
+            (node-key
+             (list (cons node-key (cons (string= node-key "") (cdr trie)))))))))
 
-(defun git-complete--filter-candidates (lst threshold exact-match)
-  "Internal function for `git-complete--get-query-candidates'. Extract
-a list of \"suitable\" completion candidates of the form (STRING
-. COUNT) from a string list LST, according to THRESHOLD. Unless
-EXACT-MATCH is non-nil, substrings may also can be cnadidates."
+(defun git-complete--filter-candidates (lst &optional query omni-p next-line-p)
+  "Extract a list of \"suitable\" completion candidates of the
+form (STRING EXACT-MATCH-P . COUNT) from a string list LST."
+  (setq lst
+        (cl-remove-if
+         (lambda (s) (string= s ""))
+         (mapcar (lambda (s) (git-complete--trim-candidate s (and omni-p query) omni-p)) lst)))
   (let* ((trie (git-complete--make-hist-trie (mapcar (lambda (s) (split-string s "$\\|\\_>")) lst)))
-         (threshold (* (or threshold 0) (cdr trie)))
-         res)
-    (git-complete--filter-candidates-internal trie threshold exact-match)))
+         (threshold (* (cond (next-line-p git-complete-next-line-completion-threshold)
+                             (omni-p      git-complete-omni-completion-threshold)
+                             (t           git-complete-line-completion-threshold))
+                       (cdr trie)))
+         (filtered (git-complete--filter-candidates-internal trie threshold)))
+    (unless omni-p
+      (setq filtered (cl-remove-if-not (lambda (x) (cadr x)) filtered)))
+    (mapcar (lambda (x) (car x)) (sort filtered (lambda (a b) (> (cddr a) (cddr b)))))))
 
-(defun git-complete--get-query-candidates (query threshold whole-line-p nextline-p)
+(defun git-complete--get-query-candidates (query nextline-p)
   "Get completion candidates. This function calls `git grep'
-command to get lines matching QUERY, then filteres with
-`git-complete--filter-candidates'."
-  (when (and (git-complete--root-dir) (<= threshold 1.0))
+command to get lines matching QUERY and returns as a list of
+string."
+  (when (git-complete--root-dir)
     (let* ((default-directory (git-complete--root-dir))
            (ignore-case (if (eq git-complete-ignore-case 'dwim)
                             (not (string-match "[A-Z]" query))
@@ -402,12 +409,9 @@ command to get lines matching QUERY, then filteres with
            lst)
       (while (and lines (cdr lines))
         (when nextline-p (pop lines))   ; pop the first line
-        (let ((str (git-complete--trim-candidate
-                    (pop lines) (unless whole-line-p query) (not whole-line-p))))
-          (unless (string= "" str) (push str lst)))
+        (push (pop lines) lst)
         (when nextline-p (pop lines)))  ; pop "--"
-      (let ((filtered (git-complete--filter-candidates lst threshold whole-line-p)))
-        (mapcar (lambda (x) (car x)) (sort filtered (lambda (a b) (> (cdr a) (cdr b)))))))))
+      lst)))
 
 ;; * interface
 
@@ -420,18 +424,15 @@ command to get lines matching QUERY, then filteres with
 (defun git-complete--internal (&optional omni-from)
   "Internal recursive function for git-complete."
   (let* ((next-line-p (looking-back "^[\s\t]*"))
-         (threshold (cond (omni-from   git-complete-omni-completion-threshold)
-                          (next-line-p git-complete-next-line-completion-threshold)
-                          (t           git-complete-line-completion-threshold)))
          (query (save-excursion
                   (when next-line-p (forward-line -1) (end-of-line))
                   (git-complete--trim-spaces
                    (buffer-substring (or omni-from (point-at-bol)) (point)) t (null omni-from))))
          (candidates (when (string-match "\\_>" query)
-                       (git-complete--get-query-candidates
-                        query threshold (null omni-from) next-line-p))))
-    (cond (candidates
-           (let ((completion (popup-menu* candidates :scroll-bar t
+                       (git-complete--get-query-candidates query next-line-p)))
+         (filtered (git-complete--filter-candidates candidates query omni-from next-line-p)))
+    (cond (filtered
+           (let ((completion (popup-menu* filtered :scroll-bar t
                                           :isearch git-complete-enable-isearch
                                           :keymap git-complete--popup-menu-keymap)))
              (git-complete--replace-substring
