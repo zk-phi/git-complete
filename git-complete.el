@@ -42,6 +42,7 @@
 
 ;; 0.0.0 test release
 ;; 0.0.1 add option git-complete-repeat-completion
+;; 0.0.2 add option git-complete-threshold
 
 ;;; Code:
 
@@ -70,25 +71,24 @@ modes."
   :type '(repeat symbol)
   :group 'git-complete)
 
-(defcustom git-complete-line-completion-threshold 0.02
-  "Threshold to filter the results from `git grep'. When 0.02 for
-example, which is the default value, completion cnadidates which
-occupy less than 2% among the grep results are dropped. Set this
-variable greater than 1.0 to disable line completion."
+(defcustom git-complete-threshold 0.005
+  "Threshold to filter the results from `git grep'. When 0.005
+for example, which is the defualt value, completion candidates
+which occupy less than 0.5% amount the grep results are dropped."
   :type 'number
   :group 'git-complete)
 
-(defcustom git-complete-omni-completion-threshold 0.005
-  "Like `git-complete-line-completion-threshold' but used while
-omni completion. Set this variable greater than 1.0 to disable
-omni completion."
+(defcustom git-complete-whole-line-completion-threshold 0.02
+  "Like `git-complete-threshold', but used to determine whether
+use whole-line completion or not. Set this variable greater than
+1.0 to disable whole-line completion."
   :type 'number
   :group 'git-complete)
 
 (defcustom git-complete-next-line-completion-threshold 0.3
-  "Like `git-complete-omni-completion-threshold' but used while
-next-line completion. Set this variable greater than 1.0 to
-disable next-line completion"
+  "Like `git-complete-threshold' but used while next-line
+completion. Set this variable greater than 1.0 to disable
+next-line completion"
   :type 'number
   :group 'git-complete)
 
@@ -145,8 +145,12 @@ candidate."
 
 (defvar git-complete-repeat-line-completion nil)
 (defvar git-complete-repeat-omni-completion nil)
+(defvar git-complete-omni-completion-threshold nil)
+(defvar git-complete-line-completion-threshold nil)
 (make-obsolete-variable 'git-complete-repeat-line-completion 'git-complete-repeat-completion "0.0.1")
 (make-obsolete-variable 'git-complete-repeat-omni-completion 'git-complete-repeat-completion "0.0.1")
+(make-obsolete-variable 'git-complete-omni-completion-threshold 'git-complete-threshold "0.0.2")
+(make-obsolete-variable 'git-complete-line-completion-threshold 'git-complete-whole-line-completion-threshold "0.0.2")
 
 ;; * utilities
 
@@ -385,14 +389,17 @@ list LST."
   (let* ((trie (git-complete--make-hist-trie (mapcar (lambda (s) (split-string s "$\\|\\_>")) lst)))
          (threshold (* (if next-line-p
                            git-complete-next-line-completion-threshold
-                         git-complete-omni-completion-threshold)
+                         (or git-complete-omni-completion-threshold ; backward compatiblity
+                             git-complete-threshold))
                        (cdr trie)))
          (filtered (git-complete--filter-candidates-internal trie threshold)))
     ;; If omni-query is NOT specified (= candidates are not trimmed
     ;; yet) and next-line-p is nil, trim candidates unless it satisfies
-    ;; git-complete-line-completion-threshold
+    ;; git-complete-whole-line-completion-threshold
     (let ((line-threshold (and (or omni-p next-line-p)
-                               (* git-complete-line-completion-threshold (cdr trie)))))
+                               (* (or git-complete-line-completion-threshold ; backward compatiblity
+                                      git-complete-whole-line-completion-threshold)
+                                  (cdr trie)))))
       (mapcar
        (lambda (e)
          (if (and line-threshold (<= (cddr e) line-threshold))
