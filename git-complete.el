@@ -43,6 +43,7 @@
 ;; 0.0.0 test release
 ;; 0.0.1 add option git-complete-repeat-completion
 ;; 0.0.2 add option git-complete-threshold
+;; 0.0.3 add option git-complete-omni-completion-type
 
 ;;; Code:
 
@@ -92,6 +93,13 @@ next-line completion"
   :type 'number
   :group 'git-complete)
 
+(defcustom git-complete-omni-completion-type 'subword
+  "Specifies how to shorten query to perform omni-completion. Can
+be either 'symbol, 'word, 'subword, or nil to disable
+omni-completion."
+  :type 'symbol
+  :group 'git-complete)
+
 (defcustom git-complete-repeat-completion 'newline
   "When nil, do not repeat completion after successful
 completions. When `newline', repeat completion only after a
@@ -131,12 +139,6 @@ current file's extension."
   :type 'sexp
   :group 'git-complete)
 
-(defcustom git-complete-omni-completion-granularity 'subword
-  "Specifies how to shorten query while omni-completion. Can be
-either 'symbol, 'word or 'subword."
-  :type 'symbol
-  :group 'git-complete)
-
 (defcustom git-complete-enable-isearch t
   "When non-nil, enable isearch by default on selecting completion
 candidate."
@@ -147,10 +149,12 @@ candidate."
 (defvar git-complete-repeat-omni-completion nil)
 (defvar git-complete-omni-completion-threshold nil)
 (defvar git-complete-line-completion-threshold nil)
+(defvar git-complete-omni-completion-granularity nil)
 (make-obsolete-variable 'git-complete-repeat-line-completion 'git-complete-repeat-completion "0.0.1")
 (make-obsolete-variable 'git-complete-repeat-omni-completion 'git-complete-repeat-completion "0.0.1")
 (make-obsolete-variable 'git-complete-omni-completion-threshold 'git-complete-threshold "0.0.2")
 (make-obsolete-variable 'git-complete-line-completion-threshold 'git-complete-whole-line-completion-threshold "0.0.2")
+(make-obsolete-variable 'git-complete-omni-completion-granularity 'git-complete-omni-completion-type "0.0.3")
 
 ;; * utilities
 
@@ -220,18 +224,19 @@ limited."
 
 (defun git-complete--beginning-of-next-word (current-start)
   "Returns the beginning position of next word (according to
-git-complete-omni-completion-granularity) in the line, or nil if
-not found."
+git-complete-omni-completion-type) in the line, or nil if not
+found."
   (save-excursion
     (let ((lim (point))
           (case-fold-search nil))
       (goto-char (or current-start (point-at-bol)))
-      (cl-case git-complete-omni-completion-granularity
+      (cl-case (or git-complete-omni-completion-granularity ; backward compatiblity
+                   git-complete-omni-completion-type)
         ((symbol)  (and (search-forward-regexp ".\\_<" lim t) (point)))
         ((word)    (and (search-forward-regexp ".\\<" lim t) (point)))
         ((subword) (and (search-forward-regexp ".\\<\\|[a-zA-Z]\\([A-Z]\\)[a-z]" lim t)
                         (or (match-beginning 1) (point))))
-        (t (error "invalid `git-complete-omni-completion-granularity'."))))))
+        (t nil)))))
 
 ;; * smart string substitution
 
@@ -468,7 +473,7 @@ string."
                          git-complete-repeat-completion))
                (let ((git-complete-fallback-function nil))
                  (git-complete--internal)))))
-          ((not next-line-p)
+          ((and (not next-line-p) git-complete-omni-completion-type)
            (let ((next-from
                   (save-excursion
                     (cond (omni-from (git-complete--beginning-of-next-word omni-from))
