@@ -302,12 +302,12 @@ When replacing \"(\" with \"}\", we need an extra \"{\" and a
     (cons (nconc (mapcar (lambda (a) (cons (cdr a) (car a))) deleted-closes) added-opens)
           (nreverse (nconc (mapcar (lambda (a) (cons (cdr a) (car a))) deleted-opens) added-closes)))))
 
-(defun git-complete--replace-substring (from to replacement &optional oneline)
+(defun git-complete--replace-substring (from to replacement &optional no-newline)
   "Replace region between FROM TO with REPLACEMENT and move the
 point just after the inserted text. Unlike `replace-string', this
 function tries to keep parenthesis balanced and indent the
 inserted text (the behavior may disabled via customize
-options). When ONELINE is specified, extra newlines are not
+options). When NO-NEWLINE is specified, extra newlines are not
 inserted."
   (let ((deleted (buffer-substring from to)) end)
     (delete-region from to)
@@ -322,8 +322,8 @@ inserted."
                  (expected (car res))
                  (extra (cdr res)))
             (when expected
-              (insert (if oneline "" "\n")
-                      (if (or oneline (memq major-mode git-complete-lispy-modes)) "" "\n")
+              (insert (if no-newline "" "\n")
+                      (if (or no-newline (memq major-mode git-complete-lispy-modes)) "" "\n")
                       (apply 'string (mapcar 'cdr expected)))
               (setq skip-newline t))
             (while extra
@@ -331,10 +331,10 @@ inserted."
                   (replace-match "")
                 (save-excursion (goto-char from) (insert (char-to-string (cdar extra)))))
               (pop extra))))
-        (unless (or oneline skip-newline) (insert "\n")))
+        (unless (or no-newline skip-newline) (insert "\n")))
       (setq end (point)))
     (indent-region from end)
-    (unless oneline
+    (unless no-newline
       (forward-line 1)
       (funcall indent-line-function)
       (back-to-indentation))))
