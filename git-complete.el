@@ -357,7 +357,9 @@ empty string."
   "Internal recursive function for
 `git-complete--filter-candidates'. Traverse a trie returned by
 `git-complete--make-hist-trie' and finds list of \"suitable\"
-completion candidates. Optional arg NODE-KEY is used internally."
+completion candidates due to THRESHOLD, returned as a list of the
+form ((STRING EXACT-MATCH-P . COUNT) ...). Optional arg NODE-KEY
+is used internally."
   (when (and trie (>= (cdr trie) threshold))
     (let ((children
            (apply 'nconc
@@ -372,21 +374,31 @@ completion candidates. Optional arg NODE-KEY is used internally."
              (list (cons node-key (cons (string= node-key "") (cdr trie)))))))))
 
 (defun git-complete--filter-candidates (lst &optional query omni-p next-line-p)
-  "Extract a list of \"suitable\" completion candidates of the
-form (STRING EXACT-MATCH-P . COUNT) from a string list LST."
+  "Extract a sorted list of \"suitable\" completion candidates of
+the form (STRING NOT-TRIMMED-P . EXACT-MATCH-P) from a string
+list LST."
+  ;; If omni-p is specified, trim candidates before constructing a trie
   (setq lst
         (cl-remove-if
          (lambda (s) (string= s ""))
          (mapcar (lambda (s) (git-complete--trim-candidate s (and omni-p query) omni-p)) lst)))
   (let* ((trie (git-complete--make-hist-trie (mapcar (lambda (s) (split-string s "$\\|\\_>")) lst)))
-         (threshold (* (cond (next-line-p git-complete-next-line-completion-threshold)
-                             (omni-p      git-complete-omni-completion-threshold)
-                             (t           git-complete-line-completion-threshold))
+         (threshold (* (if next-line-p
+                           git-complete-next-line-completion-threshold
+                         git-complete-omni-completion-threshold)
                        (cdr trie)))
          (filtered (git-complete--filter-candidates-internal trie threshold)))
-    (unless omni-p
-      (setq filtered (cl-remove-if-not (lambda (x) (cadr x)) filtered)))
-    (mapcar (lambda (x) (car x)) (sort filtered (lambda (a b) (> (cddr a) (cddr b)))))))
+    ;; If omni-query is NOT specified (= candidates are not trimmed
+    ;; yet) and next-line-p is nil, trim candidates unless it satisfies
+    ;; git-complete-line-completion-threshold
+    (let ((line-threshold (and (or omni-p next-line-p)
+                               (* git-complete-line-completion-threshold (cdr trie)))))
+      (mapcar
+       (lambda (e)
+         (if (and line-threshold (<= (cddr e) line-threshold))
+             (cons (git-complete--trim-candidate (car e) query t) (cons nil (cadr e)))
+           (cons (car e) (cons t (cadr e)))))
+       (sort filtered (lambda (a b) (> (cddr a) (cddr b))))))))
 
 (defun git-complete--get-query-candidates (query nextline-p)
   "Get completion candidates. This function calls `git grep'
@@ -427,16 +439,20 @@ string."
          (query (save-excursion
                   (when next-line-p (forward-line -1) (end-of-line))
                   (git-complete--trim-spaces
-                   (buffer-substring (or omni-from (point-at-bol)) (point)) t (null omni-from))))
+                   (buffer-substring (or omni-from (point-at-bol)) (point)) t nil)))
          (candidates (when (string-match "\\_>" query)
                        (git-complete--get-query-candidates query next-line-p)))
          (filtered (git-complete--filter-candidates candidates query omni-from next-line-p)))
     (cond (filtered
-           (let ((completion (popup-menu* filtered :scroll-bar t
-                                          :isearch git-complete-enable-isearch
-                                          :keymap git-complete--popup-menu-keymap)))
+           (let ((completion
+                  (popup-menu*
+                   (mapcar (lambda (e) (popup-make-item (car e) :value e)) filtered)
+                   :scroll-bar t
+                   :isearch git-complete-enable-isearch
+                   :keymap git-complete--popup-menu-keymap)))
              (git-complete--replace-substring
-              (if omni-from (point) (point-at-bol)) (point) completion omni-from)
+              (if (cadr completion) (point-at-bol) (point))
+              (point) (car completion) (not (cddr completion)))
              (when (or (if omni-from
                            git-complete-repeat-omni-completion
                          git-complete-repeat-line-completion) ; backward compatiblity
