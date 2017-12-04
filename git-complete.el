@@ -79,7 +79,7 @@ which occupy less than 0.5% amount the grep results are dropped."
   :type 'number
   :group 'git-complete)
 
-(defcustom git-complete-whole-line-completion-threshold 0.02
+(defcustom git-complete-whole-line-completion-threshold 0.3
   "Like `git-complete-threshold', but used to determine whether
 use whole-line completion or not. Set this variable greater than
 1.0 to disable whole-line completion."
