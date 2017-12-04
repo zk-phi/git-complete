@@ -362,6 +362,8 @@ empty string."
                (setq current-node child-node)))))
     trie))
 
+;; * trim and filter candidates
+
 (defun git-complete--filter-candidates-internal (trie threshold &optional node-key)
   "Internal recursive function for
 `git-complete--filter-candidates'. Traverse a trie returned by
@@ -384,7 +386,9 @@ is used internally."
 
 (defun git-complete--filter-candidates (lst &optional query omni-p next-line-p)
   "Extract a sorted list of \"suitable\" completion candidates of
-the form (STRING WHOLE-LINE-P . COUNT) from a string list LST."
+the form (STRING WHOLE-LINE-P . COUNT) from a string list
+LST. This function may trim candidates according to OMNI-P as
+needed."
   ;; If omni-p is specified, trim candidates before constructing a trie
   (setq lst
         (cl-remove-if
