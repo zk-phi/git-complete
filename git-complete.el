@@ -384,8 +384,7 @@ is used internally."
 
 (defun git-complete--filter-candidates (lst &optional query omni-p next-line-p)
   "Extract a sorted list of \"suitable\" completion candidates of
-the form (STRING NOT-TRIMMED-P . EXACT-MATCH-P) from a string
-list LST."
+the form (STRING WHOLE-LINE-P . COUNT) from a string list LST."
   ;; If omni-p is specified, trim candidates before constructing a trie
   (setq lst
         (cl-remove-if
@@ -405,12 +404,16 @@ list LST."
                                (* (or git-complete-line-completion-threshold ; backward compatiblity
                                       git-complete-whole-line-completion-threshold)
                                   (cdr trie)))))
-      (mapcar
-       (lambda (e)
-         (if (and line-threshold (<= (cddr e) line-threshold))
-             (cons (git-complete--trim-candidate (car e) query t) (cons nil (cadr e)))
-           (cons (car e) (cons t (cadr e)))))
-       (sort filtered (lambda (a b) (> (cddr a) (cddr b))))))))
+      (sort
+       (cl-remove-if
+        (lambda (e) (string= (car e) ""))
+        (mapcar
+         (lambda (e)
+           (if (or (not (cadr e)) (and line-threshold (<= (cddr e) line-threshold)))
+               (cons (git-complete--trim-candidate (car e) query t) (cons nil (cddr e)))
+             (cons (car e) (cons t (cddr e)))))
+         filtered))
+       (lambda (a b) (or (and (cadr a) (not (cadr b))) (> (cddr a) (cddr b))))))))
 
 (defun git-complete--get-query-candidates (query nextline-p)
   "Get completion candidates. This function calls `git grep'
@@ -464,7 +467,7 @@ string."
                    :keymap git-complete--popup-menu-keymap)))
              (git-complete--replace-substring
               (if (cadr completion) (point-at-bol) (point))
-              (point) (car completion) (not (cddr completion)))
+              (point) (car completion) (not (cadr completion)))
              (when (or (if omni-from
                            git-complete-repeat-omni-completion
                          git-complete-repeat-line-completion) ; backward compatiblity
