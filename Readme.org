@@ -136,50 +136,163 @@ Open a file under a git repo, and =M-x git-complete=
 
 See "How it works" section for details:
 
-- =git-complete-omni-completion-threshold=
-- =git-complete-line-completion-threshold=
+- =git-complete-threshold=
+- =git-complete-whole-line-completion-threshold=
 - =git-complete-next-line-completion-threshold=
-- =git-complete-repeat-line-completion=
-- =git-complete-repeat-omni-completion=
+- =git-complete-repeat-completion=
 
 ** How it works
 
-There are (internally) three completion methods in git-complete.
+There are two completion methods:
 
-- line completion
+- current-line completion
 - next-line completion
-- omni completion
 
-and chosen as follows:
+and current-line completion has two submethods:
+
+- omni-completion
+- next-line completion
+
+They work as follows:
 
 - current line has no characters before the cursor ?
-  - yes -> try "next-line completion"
-  - no -> try "line completion"
-    - line completion failed -> try "omni completion"
+  - yes -> do "next-line completion"
+  - no -> do "line completion"
+    - no line-completion candidates found ?
+      - -> fall back to "omni completion"
+    - some candidates satisfy "whole-line completion threshold" ?
+      - -> try "whole-line completion"
 
-Each completion methods works as follows:
+Each completion methods works as follows.
 
 *** Line completion
 
 before:
 
-: SHA|                   * consider "|" as the cursor
+: React|            * consider | as the cursor
 
 after:
 
-: use Digest::SHA;
+: import React from 'react';
 : |
 
-1. Collect lines containing "SHA" in your git repo, by git grepping
-   with "SHA"
+1. Collect lines containing "React" in your git repo, by =git grep=
+   -ing with "React"
 
-2. Find the lines frequently appears in your repo (>=2% by default:
-   see =git-complete-line-completion-threshold=) and suggest them
+   : > git grep -F -h "React"
+   : import React from 'react';
+   :     var class = React.createClass({
+   :     var class = React.createClass({
+   : import React from 'react';
+   :     var class = React.createClass({
+   : import React from 'react';
+   : import ReactDOM from 'react-dom';
+   :     var class = React.createClass({
+   :         ReactDOM.render(<MyComponent />);
+   : import React from 'react';
+   :     var class = React.createClass({
+   : import ReactDOM from 'react-dom';
+   :     ReactDOM.render(<AnotherComponent />);
+   : ...
 
-   1. If 2. failed, try "omni completion"
+2. Find the longest (described below) common substrings of the lines,
+   which frequently appears (threshold can be configured with
+   =git-complete-threshold=)
 
-   2. If 2. succeeded and =git-complete-repeat-line-completion= is
-      non-nil, try "next-line completion"
+   - "longest" :: if "format()" is a completion candidate, for
+                  example, its prefixes like "fo" and "forma" are not
+                  suggested
+
+   : |                                   | frequency |
+   : +-----------------------------------+-----------+
+   : | var class = React.createClass({   |       60% |
+   : | import React from 'react';        |       30% |
+   : | import ReactDOM from 'react-dom'; |        5% |
+   : | ReactDOM.render(                  |        5% |
+   : | ...                               |       ... |
+
+   (note that arguments to =ReactDOM.render= are dropped since they
+   does not appears "frequently")
+
+   - If no such suggestions are found here, try omni-completion
+
+3. For each suggestions,
+
+   - If it is an exact-match (that is, is not trimmed unlike
+     =ReactDOM.render=) and satisfies
+     =git-complete-whole-line-completion-threshold= (in addition to
+     =git-complete-threshold=), then mark it as a "whole-line"
+     completion candidate
+
+   - Otherwise, trim the candidate from the beginning, to the query
+     string ("React" in this example)
+
+   : |                                   | frequency | whole-line ? |
+   : +-----------------------------------+-----------+--------------|
+   : | var class = React.createClass({   |       60% |          yes |
+   : | import React from 'react';        |       30% |          yes |
+   : | DOM from 'react-dom';             |        5% |           no |
+   : | DOM.render(                       |        5% |           no |
+   : | ...                               |       ... |          ... |
+
+4. Query user to select a suggestion
+
+5. If selected suggestion
+
+   - is a "whole-line" completion, then delete all characters before
+     the cursor in the current line, then insert the completion
+
+     before:
+
+     : React|
+
+     after:
+
+     : import React from 'react';
+     : |
+
+   - is not a "whole-line" completion, simply insert the completion
+
+     before:
+
+     : React|
+
+     after:
+
+     : ReactDOM.render(|
+
+**** Omni completion
+
+before:
+
+: var foo = bar(MyClass.|
+
+after:
+
+: var foo = bar(MyClass.my_awesome_method|
+
+- if line-completion (i.e. =git grep= with "var foo = bar(MyClass.")
+  failed, fall back to omni completion
+
+1. Let the initial query be "var foo = var(MyClass.".
+
+   - If the query is empty, or all characters in the query are
+     whitespaces, fail (call =git-complete-fallback-function= if set).
+
+2. =git grep= with the query.
+
+3. Trim the lines found in 2., from the beginning to the query string.
+
+4. Find the longest (described below) common substrings of the lines,
+   which frequently appears (accoding to =git-complete-threshold=)
+
+   - If no such substrings are fonud, shorten the query by one word
+     (i.e. new query will be "foo = bar(MyClass.", then
+     "bar(MyClass.", finally "MyClass.". This behavior can be
+     configured with =git-complete-omni-completion-type=), and back
+     to the step 2.
+
+5. Query user to select a suggestion, and insert it
 
 *** Next-line completion
 
@@ -197,51 +310,45 @@ after:
 1. Collect lines next to "use strict;" in your git repo, by git
    grepping with "use strict;"
 
-2. Find the lines frequently appears in your repo (>=30% by default:
-   see =git-complete-next-line-completion-threshold=) and suggest them
+   : > git grep -F -h -A1 "use strict;"
+   : use strict;
+   : sub foo {
+   : --
+   : use strict;
+   : use warnings;
+   : --
+   : use strict;
+   : use warnings;
+   : --
+   : use strict;
+   : sub bar {
+   : --
+   : use strict;
+   : use utf8;
+   : --
+   : ...
 
-   1. If 2. succeeded and =git-complete-repeat-line-completion= is
-      non-nil, try "next-line" completion again
+2. Find the "whole-line" matches (see "Line completion" section)
+   frequently appears in your repo (threshold can be configured with
+   =git-complete-next-line-completion-threshold=)
 
-*** Omni completion
+   : |                       | frequency |
+   : +-----------------------+-----------|
+   : | use warnings;         |       80% |
+   : | use utf8;             |       20% |
+   : | ...                   |       ... |
 
-before:
+   - If no such matches are found, fail (call
+     =git-complete-fallback-function= if set).
 
-: var foo = bar(MyClass.|)
-
-after:
-
-: var foo = bar(MyClass.my_awesome_method|)
-
-1. Collect lines which contains "var foo = bar(MyClass." in your git
-   repo, by git grepping with "var foo = bar(MyClass."
-
-2. Find the longest (described below) common substrings which
-   immediately follows "var foo = bar(MyClass." and frequently appears
-   in your git repo (>=0.5% by default: see
-   =git-complete-omni-completion-threshold=) and suggest them
-
-   - "longest" :: if "format()" is found, for example, do not suggest
-                  "fo" as a completion candidate
-
-   1. If no such substrings found, shorten the query by 1 symbol
-
-      : "var foo = bar(MyClass." => "foo = bar(MyClass."
-
-      and if the shortened query still have at least 1 symbol, git
-      grep with the shortened query again (repeat this until all
-      symbols in the query are dropped). Otherwise completion fails.
-
-   2. If completion succeeded and
-      =git-complete-repeat-omni-completion= is non-nil, try "omni
-      completion" again
+3. Query user to select a suggestion, and insert it
 
 ** "autopair" feature
 
 When =git-grep-enable-autopair= is non-nil, the parenthesis balance is
 always kept during completion.
 
-*** (Next-)line completion
+*** Whole-line (Next-line) completion
 
 - Open paren
 
@@ -301,7 +408,7 @@ always kept during completion.
   (I'm not sure this behavior is very useful ... but just to keep the
   balance. maybe improved in the future versions ... ?)
 
-*** Omni completion
+*** Otherwise
 
 - Open paren
 
@@ -315,7 +422,7 @@ always kept during completion.
   : ("YYYY-MM-DD HH:mm:ss",
 
   then close parens are inserted automatically (without an empty line,
-  unlike line completion).
+  unlike whole-line completion).
 
   : result:
   : var formatted = moment.format("YYYY-MM-DD HH:mm:ss",|)
