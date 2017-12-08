@@ -452,16 +452,28 @@ string."
     kmap)
   "Keymap for git-complete popup menu.")
 
-(defun git-complete--internal (&optional omni-from)
-  "Internal recursive function for git-complete."
+(defun git-complete--internal-1 (omni-from)
+  "Internal mutually recursive function 1 for
+`git-complete'. Call `git-complete--get-query-candidates' to grep
+over the git repo, and pass the result to
+`git-complete--internal-2'."
   (let* ((next-line-p (looking-back "^[\s\t]*"))
          (query (save-excursion
                   (when next-line-p (forward-line -1) (end-of-line))
                   (git-complete--trim-spaces
                    (buffer-substring (or omni-from (point-at-bol)) (point)) t nil)))
          (candidates (when (string-match "\\_>" query)
-                       (git-complete--get-query-candidates query next-line-p)))
-         (filtered (git-complete--filter-candidates candidates query omni-from next-line-p)))
+                       (git-complete--get-query-candidates query next-line-p))))
+    (git-complete--internal-2 omni-from next-line-p query candidates)))
+
+(defun git-complete--internal-2 (omni-from next-line-p query candidates)
+  "Internal mutually recursive function 2 for
+`git-complete'. Takes grep result and filter it. If some of the
+candidates passes the filter, prompt user to select a completion
+from them and perform completion. Otherwise, shorten the grep
+query wrt `git-complete-omni-completion-type' and call back
+`git-complete--internal-1'."
+  (let ((filtered (git-complete--filter-candidates candidates query omni-from next-line-p)))
     (cond (filtered
            (let ((completion
                   (popup-menu*
@@ -479,14 +491,14 @@ string."
                            (looking-back "^[\s\t]*")
                          git-complete-repeat-completion))
                (let ((git-complete-fallback-function nil))
-                 (git-complete--internal)))))
+                 (git-complete--internal-1 nil)))))
           ((and (not next-line-p) git-complete-omni-completion-type)
            (let ((next-from
                   (save-excursion
                     (cond (omni-from (git-complete--beginning-of-next-word omni-from))
                           (t (back-to-indentation) (point))))))
              (cond (next-from
-                    (git-complete--internal next-from))
+                    (git-complete--internal-1 next-from))
                    (git-complete-fallback-function
                     (funcall git-complete-fallback-function))
                    (t
@@ -499,7 +511,7 @@ string."
 (defun git-complete ()
   "Complete the line at point with `git grep'."
   (interactive)
-  (git-complete--internal))
+  (git-complete--internal-1 nil))
 
 ;; * provide
 
