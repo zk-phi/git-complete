@@ -169,6 +169,29 @@ result."
   "Like `up-list' but regardless of `forward-sexp-function'."
   (goto-char (or (scan-lists (point) 1 1) (buffer-end 1))))
 
+;; (defun git-complete--shell-command-to-string (command &optional consumer-fn)
+;;   (funcall consumer-fn (shell-command-to-string command)))
+;;
+;; (defvar git-complete--async-process nil)
+;;
+;; (defun git-complete--maybe-abort-async-completion ()
+;;   (when git-complete--process
+;;     (set-process-sentinel git-complete--async-process nil)
+;;     (kill-process git-complete--process)
+;;     (setq git-complete--process nil)))
+;;
+;; (defun git-complete--async-shell-command (command callback)
+;;   (when git-complete--async-process
+;;     (setq git-complete--async-process nil))
+;;   (with-current-buffer (get-buffer-create " *git-complete*")
+;;     (erase-buffer)
+;;     (setq git-complete--async-process
+;;           (start-process-shell-command "git-complete" (current-buffer) command))
+;;     (set-process-sentinel
+;;      git-complete--async-process
+;;      `(lambda (&rest args)
+;;         (funcall ',callback (with-current-buffer " *git-complete*" (buffer-string)))))))
+
 (defun git-complete--trim-spaces (str left right)
   "Remove leading/trailing whitespaces from STR."
   (replace-regexp-in-string
