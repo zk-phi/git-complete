@@ -410,7 +410,7 @@ needed."
     ;; If omni-query is NOT specified (= candidates are not trimmed
     ;; yet) and next-line-p is nil, trim candidates unless it satisfies
     ;; git-complete-whole-line-completion-threshold
-    (let ((line-threshold (and (or omni-p next-line-p)
+    (let ((line-threshold (and (not (or omni-p next-line-p))
                                (* (or git-complete-line-completion-threshold ; backward compatiblity
                                       git-complete-whole-line-completion-threshold)
                                   (cdr trie)))))
