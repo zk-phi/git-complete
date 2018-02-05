@@ -362,6 +362,12 @@ empty string."
                (setq current-node child-node)))))
     trie))
 
+(defun git-complete--dump-trie (trie)
+  "FOR DEBUG USE."
+  (let ((res nil))
+    (maphash (lambda (k v) (push (cons k (git-complete--dump-trie v)) res)) (car trie))
+    (cons (cdr trie) res)))
+
 ;; * trim and filter candidates
 
 (defun git-complete--filter-candidates-internal (trie threshold &optional node-key)
