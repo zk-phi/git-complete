@@ -72,10 +72,10 @@ modes."
   :type '(repeat symbol)
   :group 'git-complete)
 
-(defcustom git-complete-threshold 0.3
-  "Threshold to filter the results from `git grep'. When 0.005
-for example, which is the defualt value, completion candidates
-which occupy less than 0.5% amount the grep results are dropped."
+(defcustom git-complete-threshold 0.05
+  "Threshold to filter the results from `git grep'. When 0.05 for
+example, which is the defualt value, completion candidates which
+occupy less than 5% amount the grep results are dropped."
   :type 'number
   :group 'git-complete)
 
