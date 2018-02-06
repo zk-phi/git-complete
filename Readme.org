@@ -144,26 +144,22 @@ See "How it works" section for details:
 
 ** How it works
 
-There are two completion methods:
+There are two methods to collect completions:
 
 - current-line completion
 - next-line completion
 
-and a fallback method:
+and each completions are classified into two types:
 
-- omni-completion
+- whole-line completion
+- omni completion
 
-in git-complete, which work as follows:
+User is prompted to select one of the completions, and the selected
+completion is inserted to the buffer in different ways according to
+its type.
 
-- current line has no characters before the cursor ?
-  - yes -> try "next-line completion"
-  - no -> try "current-line completion"
-    - current-line completion failed ?
-      - -> try "omni completion"
-
-Each completion methods works as follows:
-
-*** Current-line completion
+*** Completion collection
+**** Current-line completion
 
 example condition:
 
@@ -188,94 +184,76 @@ example condition:
    :     ReactDOM.render(<AnotherComponent />);
    : ...
 
-2. Strip some characters off from the end of each lines, until it gets
-   "common enough" (defined by =git-complete-threshold=). If no
-   characters are dropped from a line, it is called an "exact match"
+2. If some lines found in 1. appear "commonly" (as defined by
+   =git-complete-whole-line-completion-threshold=), they are added to
+   the completions list, as "whole-line" completions.
 
-   : |                                               | frequency | exact ? |
-   : +-----------------------------------------------+-----------+---------|
-   : | export default class extends React.Component{ |       60% |     yes |
-   : | import React from 'react';                    |       30% |     yes |
-   : | import ReactDOM from 'react-dom';             |        5% |     yes |
-   : | ReactDOM.render(                              |        5% |      no |
-   : | ...                                           |       ... |     ... |
+   : |                                               | frequency | type       |
+   : +-----------------------------------------------+-----------+------------|
+   : | export default class extends React.Component{ |       60% | whole-line |
+   : | import React from 'react';                    |       30% | whole-line |
+   : | ...                                           |       ... |        ... |
+
+3. Trim each lines found in 1. as follows:
+
+   - Find the query string ("React" in this case) inside the line and
+     remove characters before the query and the query itself.
+
+   - If the line has more close parens than open parens, remove
+     characters after the innermost matching close paren.
+
+   : from 'react';
+   : .Component {
+   : .Component {
+   : from 'react';
+   : .Component {
+   : from 'react';
+   : DOM from 'react-dom';
+   : .Component {
+   : DOM.render(<MyComponent />);
+   : from 'react';
+   : .Component {
+   : DOM from 'react-dom';
+   : DOM.render(<AnotherComponent />);
+   : ...
+
+4. Drop some words from the end of each lines until it gets "common"
+   enough (as defined in =git-complete-threshold=), and add to the
+   completions list as "omni" completions.
+
+   : |                                                | frequency | type       |
+   : +------------------------------------------------+-----------+------------|
+   : | export default class extends React.Component { |       60% | whole-line |
+   : | import React from 'react';                     |       30% | whole-line |
+   : | .Component {                                   |       60% |       omni |
+   : | from 'react';                                  |       30% |       omni |
+   : | DOM from 'react-dom';                          |        5% |       omni |
+   : | DOM.render(                                    |        5% |       omni |
+   : | ...                                            |       ... |        ... |
 
    (argument to =ReactDOM.render= is dropped, since they does not
    appear "commonly")
 
-   - If no such common substrings are found here, fall back to
-     omni-completion
+   If some lines did not get "common" enough even if all the words are
+   dropped except for one, they are not added to the completions list.
 
-3. For each suggestions,
+5. If no completions are found, shorten the query by one subword
+   (configurable via =git-cmopletion-omni-completion-type=) and =git
+   grep= again, then back to the step 3. .
 
-   - If it is an "exact match" and satisfies
-     =git-complete-whole-line-completion-threshold= (in addition to
-     =git-complete-threshold=), then mark it as a "whole-line"
-     completion candidate
+   example condition:
 
-   - Otherwise, trim characters before the query ("React" in this
-     example) and the query itself
+   : var foo = bar(MyClass.|
 
-   : |                                                | frequency | exact ? | whole-line ? |
-   : +------------------------------------------------+-----------+---------+--------------|
-   : | export default class extends React.Component { |       60% |     yes |          yes |
-   : | import React from 'react';                     |       30% |     yes |          yes |
-   : | DOM from 'react-dom';                          |        5% |     yes |           no |
-   : | DOM.render(                                    |        5% |      no |           no |
-   : | ...                                            |       ... |     ... |          ... |
+   The query "var foo = bar(MyClass." is too specific to find some
+   "common" lines, thus shortened to "foo = bar(MyClass.",
+   "bar(MyClass." then "MyClass." which may give some "common" method
+   names of the class "MyClass".
 
-4. Query user to select a suggestion
+   Note that this case does not give any "whole-line" completions,
+   since the step 2. is skipped.
 
-5. If the selected suggestion
-
-   - is a "whole-line" completion, then delete all characters in the
-     line, then insert the completion and a newline
-
-     before:
-
-     : React|
-
-     after:
-
-     : import React from 'react';
-     : |
-
-   - is not a "whole-line" completion, just insert the completion
-
-     before:
-
-     : React|
-
-     after:
-
-     : ReactDOM.render(|
-
-**** Omni completion
-
-example condition:
-
-: var foo = bar(MyClass.|
-
-If current-line completion fails (since "var foo = bar(MyClass." does
-not appear commonly in the repo), omni-completion works as follows:
-
-1. Let the initial query be "var foo = var(MyClass."
-
-2. =git grep= with the query
-
-3. Trim the lines found, as like a non-"whole-line" completion in
-   "current-line completion"
-
-   - If no common substrigs are fonud, drop the first word from the
-     query (i.e. new query will be "foo = bar(MyClass.", then
-     "bar(MyClass.", finally "MyClass.". This behavior can be
-     configured with =git-complete-omni-completion-type=), and back to
-     the step 2. If all characters are dropped, fail
-
-5. Query user to select a suggestion, and insert it as like a
-   non-"whole-line" completion
-
-*** Next-line completion
+**** Next-line completion
 
 example condition:
 
@@ -303,19 +281,63 @@ example condition:
    : --
    : ...
 
-2. Find "whole-line" matches (see "Current-line completion" section
-   for what "whole-line" means) according to
+2. Find "whole-line" matches as like the step 2. of "Current-line
+   completion", according to
    =git-complete-next-line-completion-threshold=
 
-   : |                       | frequency |
-   : +-----------------------+-----------|
-   : | use warnings;         |       80% |
-   : | use utf8;             |       20% |
-   : | ...                   |       ... |
+   : |                       | frequency | type       |
+   : +-----------------------+-----------+------------|
+   : | use warnings;         |       80% | whole-line |
+   : | use utf8;             |       20% | whole-line |
+   : | ...                   |       ... |        ... |
 
-   - If no "whole-line" matches are found, fail
+   Note that next-line completion does not give any "omni"
+   completions.
 
-3. Query user to select a suggestion, and insert it
+*** Completion insertion
+**** Whole-line completion
+
+example condition:
+
+: React|
+
+and the selected completion is:
+
+: export default class extends React.Component {
+
+1. Delete all characters in the line
+
+   : |
+
+2. Insert the completion with a newline and indentation
+
+   : export default class extends React.Component {
+   :     |
+
+3. Add some close parens as needed (See "autopair" section for details)
+
+   : export default class extends React.Component {
+   :     |
+   : }
+
+**** Omni completion
+
+example condition:
+
+: var foo = moment().format|
+
+and the selected completion is:
+
+: ("YYYY-MM-DD HH:mm:ss",
+
+1. Just insert the completion
+
+   : var foo = moment().format("YYYY-MM-DD HH:mm:ss",|
+
+2. Add some close parens as needed (See "autopair" section for
+   details) after the cursor
+
+   : var foo = moment().format("YYYY-MM-DD HH:mm:ss",|)
 
 ** "autopair" feature
 
