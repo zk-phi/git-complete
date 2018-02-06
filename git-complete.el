@@ -174,27 +174,30 @@ result."
   (replace-regexp-in-string
    (concat "^" (if left "[\s\t]*" "") "\\|" (if right "[\s\t]*" "") "$") "" str))
 
-(defun git-complete--trim-candidate (str trim-query delimited)
+(defun git-complete--trim-candidate (str omni-query)
   "Format candidate (= result from git-complete) by removing some
 leading/trailing characters.
 
-1. When TRIM-QUERY is non-nil, try to match TRIM-QUERY with STR,
-and remove characters before the match-end (if no matches are
-found, return an empty string). Otherwise remove leading
+1. If OMNI-QUERY is nil, just remove leading and trailing
 whitespaces.
 
-2. When DELIMITED is non-nil and STR has more close parens than
-open parens, remove all characters outside the unbalanced close
-parens (close parens which do not have matching open
-parens). Otherwise remove trailing whitespaces."
+2. If OMNI-QUERY is non-nil:
+
+   i. Search OMNI-QUERY inside STR, and remove characters before
+      the query and the query itself (if no matches are found,
+      return an empty string).
+
+   ii. When STR has more close parens than open parens, remove
+       all characters outside the unbalanced close parens (close
+       parens which do not have matching open parens)."
   (with-temp-buffer
     (save-excursion (insert str))
-    (if trim-query
-        (unless (search-forward trim-query nil t)
+    (if omni-query
+        (unless (search-forward omni-query nil t)
           (goto-char (point-max)))
       (skip-chars-forward "\s\t"))
     (delete-region (point-min) (point))
-    (if delimited
+    (if omni-query
         (ignore-errors
           (git-complete--up-list-unsafe)
           (delete-region (1- (point)) (point-max)))
@@ -370,60 +373,42 @@ empty string."
 
 ;; * trim and filter candidates
 
-(defun git-complete--filter-candidates-internal (trie threshold &optional node-key)
+(defun git-complete--filter-candidates-internal (trie threshold exact-p &optional node-key)
   "Internal recursive function for
 `git-complete--filter-candidates'. Traverse a trie returned by
 `git-complete--make-hist-trie' and finds list of \"suitable\"
-completion candidates due to THRESHOLD, returned as a list of the
-form ((STRING EXACT-MATCH-P . COUNT) ...). Optional arg NODE-KEY
-is used internally."
+completion candidates due to THRESHOLD and EXACT-P, returned as a
+list of the form ((STRING COUNT) ...). Optional arg NODE-KEY is
+used internally."
   (when (and trie (>= (cdr trie) threshold))
     (let ((children
            (apply 'nconc
                   (git-complete--maphash
                    (lambda (k v)
-                     (funcall 'git-complete--filter-candidates-internal v threshold k))
+                     (funcall 'git-complete--filter-candidates-internal v threshold exact-p k))
                    (car trie)))))
       (cond (children
              (mapcar (lambda (x) (cons (if node-key (concat node-key (car x)) (car x)) (cdr x)))
                      children))
-            (node-key
-             (list (cons node-key (cons (string= node-key "") (cdr trie)))))))))
+            ((and node-key (or (not exact-p) (string= node-key "")))
+             (list (cons node-key (cdr trie))))))))
 
-(defun git-complete--filter-candidates (lst &optional query omni-p next-line-p)
+(defun git-complete--filter-candidates (lst &optional omni-query threshold)
   "Extract a sorted list of \"suitable\" completion candidates of
-the form (STRING WHOLE-LINE-P . COUNT) from a string list
-LST. This function may trim candidates according to OMNI-P as
-needed."
-  ;; If omni-p is specified, trim candidates before constructing a trie
+the form (STRING EXACT-P . COUNT) from a string list LST. If
+OMNI-QUERY is specified, candidates are trimmed by
+`git-complete--trim-candidate'. Otherwise candidates are not
+trimmed and result is limited to exact matches."
   (setq lst
         (cl-remove-if
          (lambda (s) (string= s ""))
-         (mapcar (lambda (s) (git-complete--trim-candidate s (and omni-p query) omni-p)) lst)))
+         (mapcar (lambda (s) (git-complete--trim-candidate s omni-query)) lst)))
   (let* ((trie (git-complete--make-hist-trie (mapcar (lambda (s) (split-string s "$\\|\\_>")) lst)))
-         (threshold (* (if next-line-p
-                           git-complete-next-line-completion-threshold
-                         (or git-complete-omni-completion-threshold ; backward compatiblity
-                             git-complete-threshold))
-                       (cdr trie)))
-         (filtered (git-complete--filter-candidates-internal trie threshold)))
-    ;; If omni-query is NOT specified (= candidates are not trimmed
-    ;; yet) and next-line-p is nil, trim candidates unless it satisfies
-    ;; git-complete-whole-line-completion-threshold
-    (let ((line-threshold (and (not (or omni-p next-line-p))
-                               (* (or git-complete-line-completion-threshold ; backward compatiblity
-                                      git-complete-whole-line-completion-threshold)
-                                  (cdr trie)))))
-      (sort
-       (cl-remove-if
-        (lambda (e) (string= (car e) ""))
-        (mapcar
-         (lambda (e)
-           (if (or (not (cadr e)) (and line-threshold (<= (cddr e) line-threshold)))
-               (cons (git-complete--trim-candidate (car e) query t) (cons nil (cddr e)))
-             (cons (car e) (cons t (cddr e)))))
-         filtered))
-       (lambda (a b) (or (and (cadr a) (not (cadr b))) (> (cddr a) (cddr b))))))))
+         (threshold (* threshold (cdr trie)))
+         (filtered (git-complete--filter-candidates-internal trie threshold (null omni-query))))
+    (sort
+     (mapcar (lambda (e) (cons (car e) (cons (null omni-query) (cdr e)))) filtered)
+     (lambda (a b) (> (cddr a) (cddr b))))))
 
 (defun git-complete--get-query-candidates (query nextline-p)
   "Get completion candidates. This function calls `git grep'
@@ -467,7 +452,18 @@ string."
                    (buffer-substring (or omni-from (point-at-bol)) (point)) t nil)))
          (candidates (when (string-match "\\_>" query)
                        (git-complete--get-query-candidates query next-line-p)))
-         (filtered (git-complete--filter-candidates candidates query omni-from next-line-p)))
+         (filtered (nconc (when (or next-line-p (null omni-from))
+                            (git-complete--filter-candidates
+                             candidates nil
+                             (or git-complete-line-completion-threshold ; backward compatiblity
+                                 (if next-line-p
+                                     git-complete-next-line-completion-threshold
+                                   git-complete-whole-line-completion-threshold))))
+                          (unless next-line-p
+                            (git-complete--filter-candidates
+                             candidates query
+                             (or git-complete-omni-completion-threshold ; backward compatiblity
+                                 git-complete-threshold))))))
     (cond (filtered
            (let ((completion
                   (popup-menu*
