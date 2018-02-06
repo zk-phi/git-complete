@@ -188,11 +188,11 @@ example condition:
    =git-complete-whole-line-completion-threshold=), they are added to
    the completions list, as "whole-line" completions.
 
-   : |                                               | frequency | type       |
-   : +-----------------------------------------------+-----------+------------|
-   : | export default class extends React.Component{ |       60% | whole-line |
-   : | import React from 'react';                    |       30% | whole-line |
-   : | ...                                           |       ... |        ... |
+   : |                                                 | frequency | type       |
+   : +-------------------------------------------------+-----------+------------|
+   : | export default class extends React.Component{\n |       60% | whole-line |
+   : | import React from 'react';\n                    |       30% | whole-line |
+   : | ...                                             |       ... |        ... |
 
 3. Trim each lines found in 1. as follows:
 
@@ -221,15 +221,15 @@ example condition:
    enough (as defined in =git-complete-threshold=), and add to the
    completions list as "omni" completions.
 
-   : |                                                | frequency | type       |
-   : +------------------------------------------------+-----------+------------|
-   : | export default class extends React.Component { |       60% | whole-line |
-   : | import React from 'react';                     |       30% | whole-line |
-   : | .Component {                                   |       60% |       omni |
-   : | from 'react';                                  |       30% |       omni |
-   : | DOM from 'react-dom';                          |        5% |       omni |
-   : | DOM.render(                                    |        5% |       omni |
-   : | ...                                            |       ... |        ... |
+   : |                                                  | frequency | type       |
+   : +--------------------------------------------------+-----------+------------|
+   : | export default class extends React.Component {\n |       60% | whole-line |
+   : | import React from 'react';\n                     |       30% | whole-line |
+   : | .Component {\n                                   |       60% |       omni |
+   : | from 'react';\n                                  |       30% |       omni |
+   : | DOM from 'react-dom';\n                          |        5% |       omni |
+   : | DOM.render(                                      |        5% |       omni |
+   : | ...                                              |       ... |        ... |
 
    (argument to =ReactDOM.render= is dropped, since they does not
    appear "commonly")
@@ -285,11 +285,11 @@ example condition:
    completion", according to
    =git-complete-next-line-completion-threshold=
 
-   : |                       | frequency | type       |
-   : +-----------------------+-----------+------------|
-   : | use warnings;         |       80% | whole-line |
-   : | use utf8;             |       20% | whole-line |
-   : | ...                   |       ... |        ... |
+   : |                         | frequency | type       |
+   : +-------------------------+-----------+------------|
+   : | use warnings;\n         |       80% | whole-line |
+   : | use utf8;\n             |       20% | whole-line |
+   : | ...                     |       ... |        ... |
 
    Note that next-line completion does not give any "omni"
    completions.
