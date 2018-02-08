@@ -185,25 +185,29 @@ whitespaces.
 
    i. Search OMNI-QUERY inside STR, and remove characters before
       the query and the query itself (if no matches are found,
-      return an empty string).
+      return an empty string) and delete all leading whitespaces
+      except for one.
 
    ii. When STR has more close parens than open parens, remove
        all characters outside the unbalanced close parens (close
-       parens which do not have matching open parens)."
+       parens which do not have matching open parens). Then
+       delete all trailing whitespaces."
   (with-temp-buffer
     (save-excursion (insert str))
     (if omni-query
-        (unless (search-forward omni-query nil t)
+        (if (search-forward omni-query nil t)
+            (and (looking-at "\\([\s\t]\\)+[\s\t]")
+                 (goto-char (match-end 1)))
           (goto-char (point-max)))
       (skip-chars-forward "\s\t"))
     (delete-region (point-min) (point))
-    (if omni-query
-        (ignore-errors
-          (git-complete--up-list-unsafe)
-          (delete-region (1- (point)) (point-max)))
-      (goto-char (point-max))
-      (skip-chars-backward "\s\t")
-      (delete-region (point) (point-max)))
+    (when omni-query
+      (ignore-errors
+        (git-complete--up-list-unsafe)
+        (delete-region (1- (point)) (point-max))))
+    (goto-char (point-max))
+    (skip-chars-backward "\s\t")
+    (delete-region (point) (point-max))
     (buffer-string)))
 
 (defvar-local git-complete--root-dir nil) ; cache
