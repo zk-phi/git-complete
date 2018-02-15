@@ -93,6 +93,12 @@ next-line completion"
   :type 'number
   :group 'git-complete)
 
+(defcustom git-complete-enable-fuzzy-whole-line-completion t
+  "When non-nil, enable fuzzy whole-line completion during
+omni-completion."
+  :type 'boolean
+  :group 'git-complete)
+
 (defcustom git-complete-omni-completion-type 'subword
   "Specifies how to shorten query to perform omni-completion. Can
 be either 'symbol, 'word, 'subword, or nil to disable
@@ -401,16 +407,21 @@ NODE-KEY is used internally."
             ((not exact-p)
              (list (cons node-key (cons nil (cdr trie)))))))))
 
-(defun git-complete--filter-candidates (lst &optional omni-query threshold)
+(defun git-complete--filter-candidates (lst &optional omni-query threshold filter-regex)
   "Extract a sorted list of \"suitable\" completion candidates of
 the form (STRING WHOLE-LINE-P EXACT-P . COUNT) from a string list
 LST. If OMNI-QUERY is specified, candidates are trimmed by
 `git-complete--trim-candidate'. Otherwise candidates are not
-trimmed and result is limited to exact matches."
+trimmed and result is limited to exact matches. When FILTER-REGEX
+is specified, each candidates must match the regex."
   (setq lst
         (cl-remove-if
          (lambda (s) (string= s ""))
-         (mapcar (lambda (s) (git-complete--trim-candidate s omni-query)) lst)))
+         (mapcar (lambda (s)
+                   (if (or (null filter-regex) (string-match filter-regex s))
+                       (git-complete--trim-candidate s omni-query)
+                     ""))
+                 lst)))
   (let* ((trie (git-complete--make-hist-trie (mapcar (lambda (s) (split-string s "$\\|\\_>")) lst)))
          (threshold (* threshold (cdr trie)))
          (filtered (git-complete--filter-candidates-internal trie threshold (null omni-query))))
@@ -452,25 +463,37 @@ string."
 
 (defun git-complete--internal (&optional omni-from)
   "Internal recursive function for git-complete."
-  (let* ((next-line-p (looking-back "^[\s\t]*"))
-         (query (save-excursion
-                  (when next-line-p (forward-line -1) (end-of-line))
-                  (git-complete--trim-spaces
-                   (buffer-substring (or omni-from (point-at-bol)) (point)) t nil)))
-         (candidates (when (string-match "\\_>" query)
-                       (git-complete--get-query-candidates query next-line-p)))
-         (filtered (nconc (when (or next-line-p (null omni-from))
-                            (git-complete--filter-candidates
-                             candidates nil
-                             (or git-complete-line-completion-threshold ; backward compatiblity
-                                 (if next-line-p
-                                     git-complete-next-line-completion-threshold
-                                   git-complete-whole-line-completion-threshold))))
-                          (unless next-line-p
-                            (git-complete--filter-candidates
-                             candidates query
-                             (or git-complete-omni-completion-threshold ; backward compatiblity
-                                 git-complete-threshold))))))
+  (let* ((next-line-p
+          (looking-back "^[\s\t]*"))
+         (query
+          (save-excursion
+            (when next-line-p (forward-line -1) (end-of-line))
+            (git-complete--trim-spaces
+             (buffer-substring (or omni-from (point-at-bol)) (point)) t nil)))
+         (candidates
+          (when (string-match "\\_>" query)
+            (git-complete--get-query-candidates query next-line-p)))
+         (filtered
+          (nconc
+           ;; whole-line matches
+           (when (or (null omni-from) git-complete-enable-fuzzy-whole-line-completion)
+             (git-complete--filter-candidates
+              candidates nil
+              (or git-complete-line-completion-threshold ; backward compatiblity
+                  (if next-line-p
+                      git-complete-next-line-completion-threshold
+                    git-complete-whole-line-completion-threshold))
+              (and omni-from
+                   (mapconcat 'identity
+                              (mapcar 'regexp-quote
+                                      (split-string
+                                       (buffer-substring (point-at-bol) omni-from))) ".*"))))
+           ;; omni matches
+           (unless next-line-p
+             (git-complete--filter-candidates
+              candidates query
+              (or git-complete-omni-completion-threshold ; backward compatiblity
+                  git-complete-threshold))))))
     (cond (filtered
            (cl-destructuring-bind (str whole-line-p exact-p . count)
                (popup-menu*
