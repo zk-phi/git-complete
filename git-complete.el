@@ -476,18 +476,21 @@ string."
          (filtered
           (nconc
            ;; whole-line matches
-           (when (or (null omni-from) git-complete-enable-fuzzy-whole-line-completion)
+           (when (or (null omni-from)
+                     next-line-p
+                     git-complete-enable-fuzzy-whole-line-completion)
              (git-complete--filter-candidates
               candidates nil
               (or git-complete-line-completion-threshold ; backward compatiblity
                   (if next-line-p
                       git-complete-next-line-completion-threshold
                     git-complete-whole-line-completion-threshold))
-              (and omni-from
-                   (mapconcat 'identity
-                              (mapcar 'regexp-quote
-                                      (split-string
-                                       (buffer-substring (point-at-bol) omni-from))) ".*"))))
+              (when (and omni-from (not next-line-p))
+                ;; fuzzy whole-line-completion
+                (mapconcat 'identity
+                           (mapcar 'regexp-quote
+                                   (split-string
+                                    (buffer-substring (point-at-bol) omni-from))) ".*"))))
            ;; omni matches
            (unless next-line-p
              (git-complete--filter-candidates
@@ -503,19 +506,23 @@ string."
                 :keymap git-complete--popup-menu-keymap)
              (git-complete--replace-substring
               (if whole-line-p (point-at-bol) (point)) (point) str (not exact-p))
-             (when (or (if omni-from
-                           git-complete-repeat-omni-completion
-                         git-complete-repeat-line-completion) ; backward compatiblity
+             (when (or (if whole-line-p
+                           git-complete-repeat-line-completion
+                         git-complete-repeat-omni-completion) ; backward compatiblity
                        (if (eq git-complete-repeat-completion 'newline)
                            (looking-back "^[\s\t]*")
                          git-complete-repeat-completion))
                (let ((git-complete-fallback-function nil))
                  (git-complete--internal)))))
-          ((and (not next-line-p) git-complete-omni-completion-type)
+          ((and git-complete-omni-completion-type)
            (let ((next-from
                   (save-excursion
-                    (cond (omni-from (git-complete--beginning-of-next-word omni-from))
-                          (t (back-to-indentation) (point))))))
+                    (cond (omni-from
+                           (git-complete--beginning-of-next-word omni-from))
+                          (t
+                           (when next-line-p (forward-line -1))
+                           (back-to-indentation)
+                           (point))))))
              (cond (next-from
                     (git-complete--internal next-from))
                    (git-complete-fallback-function
