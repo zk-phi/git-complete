@@ -609,8 +609,9 @@ example condition:
    : | use utf8;\n             |       20% | whole-line |
    : | ...                     |       ... |        ... |
 
-   (next-line completion does not give any "non whole-line"
-   completions for now)
+3. If no completions are found, shorten the query by one word, as like
+   "omni completion". Otherwise, if some completions are found, query
+   user to select one and insert it.
 
 ** "autopair" feature
 
