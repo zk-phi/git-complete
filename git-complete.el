@@ -324,7 +324,6 @@ options). When NO-NEWLINE is specified, extra newlines are not
 inserted."
   (let ((deleted (buffer-substring from to)) end)
     (delete-region from to)
-    (setq from (goto-char from))
     (insert replacement)
     (save-excursion
       (let (skip-newline)
