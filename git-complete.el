@@ -253,7 +253,7 @@ found."
 
 ;; * smart string substitution
 
-(defun git-complete--parse-parens (str)
+(defun git-complete--find-unmatched-parens (str)
   "Internal function for `git-complete--replace-substring'. Parse
 str and returns unbalanced parens in the form (((EXTRA_OPEN
 . EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE . EXPECTED_OPEN) ...)).
@@ -281,10 +281,10 @@ Example:
         (forward-char 1)))
     (cons opens closes)))
 
-(defun git-complete--diff-parens (lst1 lst2)
+(defun git-complete--diff-unmatched-parens (lst1 lst2)
   "Internal function for
 `git-complete--replace-substring'. Compute difference of two
-results of `git-complete--parse-parens'.
+results of `git-complete--find-unmatched-parens'.
 
 Example:
 - (git-complete--diff-parens
@@ -329,9 +329,9 @@ inserted."
     (save-excursion
       (let (skip-newline)
         (when git-complete-enable-autopair
-          (let* ((res (git-complete--diff-parens
-                       (git-complete--parse-parens deleted)
-                       (git-complete--parse-parens replacement)))
+          (let* ((res (git-complete--diff-unmatched-parens
+                       (git-complete--find-unmatched-parens deleted)
+                       (git-complete--find-unmatched-parens replacement)))
                  (expected (car res))
                  (extra (cdr res)))
             (when expected
