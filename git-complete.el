@@ -331,18 +331,18 @@ inserted."
           (let* ((res (git-complete--diff-unmatched-parens
                        (git-complete--find-unmatched-parens deleted)
                        (git-complete--find-unmatched-parens replacement)))
-                 (expected (car res))
-                 (extra (cdr res)))
-            (when expected
+                 (closes (car res))
+                 (opens (cdr res)))
+            (when closes
               (insert (if no-newline "" "\n")
                       (if (or no-newline (memq major-mode git-complete-lispy-modes)) "" "\n")
-                      (apply 'string (mapcar 'cdr expected)))
+                      (apply 'string (mapcar 'cdr closes)))
               (setq skip-newline t))
-            (while extra
-              (if (looking-at (concat "[\s\t\n]*" (char-to-string (caar extra))))
+            (while opens
+              (if (looking-at (concat "[\s\t\n]*" (char-to-string (caar opens))))
                   (replace-match "")
-                (save-excursion (goto-char from) (insert (char-to-string (cdar extra)))))
-              (pop extra))))
+                (save-excursion (goto-char from) (insert (char-to-string (cdar opens)))))
+              (pop opens))))
         (unless (or no-newline skip-newline) (insert "\n")))
       (setq end (point)))
     (indent-region from end)
