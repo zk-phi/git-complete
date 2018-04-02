@@ -54,6 +54,8 @@
   "Yet another completion engine powered by \"git grep\"."
   :group 'git-complete)
 
+;; autopair / newline
+
 (defcustom git-complete-enable-autopair t
   "When non-nil, `git-complete' assumes that the parens are
 always balanced, and keep the balance on
@@ -71,6 +73,8 @@ after the point by when `git-complete-enable-autopair', in the
 modes."
   :type '(repeat symbol)
   :group 'git-complete)
+
+;; completion
 
 (defcustom git-complete-threshold 0.05
   "Threshold to filter the results from `git grep'. When 0.05 for
@@ -145,11 +149,15 @@ current file's extension."
   :type 'sexp
   :group 'git-complete)
 
+;; interface
+
 (defcustom git-complete-enable-isearch t
   "When non-nil, enable isearch by default on selecting completion
 candidate."
   :type 'boolean
   :group 'git-complete)
+
+;; deprecated
 
 (defvar git-complete-repeat-line-completion nil)
 (defvar git-complete-repeat-omni-completion nil)
@@ -165,14 +173,13 @@ candidate."
 ;; * utilities
 
 (defun git-complete--maphash (fn hash)
-  "Like `maphash' but returns a list of returned value as the
-result."
+  "Like `maphash' but returns a list of returned values."
   (let (lst)
     (maphash (lambda (k v) (push (funcall fn k v) lst)) hash)
     lst))
 
 (defun git-complete--up-list-unsafe ()
-  "Like `up-list' but regardless of `forward-sexp-function'."
+  "Like `up-list', but not aware of `forward-sexp-function'."
   (goto-char (or (scan-lists (point) 1 1) (buffer-end 1))))
 
 (defun git-complete--trim-spaces (str left right)
@@ -181,11 +188,11 @@ result."
    (concat "^" (if left "[\s\t]*" "") "\\|" (if right "[\s\t]*" "") "$") "" str))
 
 (defun git-complete--trim-candidate (str omni-query)
-  "Format candidate (= result from git-complete) by removing some
-leading/trailing characters.
+  "Remove some leading/trailing characters from each lines of
+`git grep' result, as follows:
 
 1. If OMNI-QUERY is nil, just remove leading and trailing
-whitespaces.
+   whitespaces.
 
 2. If OMNI-QUERY is non-nil:
 
@@ -195,9 +202,9 @@ whitespaces.
       except for one.
 
    ii. When STR has more close parens than open parens, remove
-       all characters outside the unbalanced close parens (close
-       parens which do not have matching open parens). Then
-       delete all trailing whitespaces."
+       all characters outside the innermost unbalanced close
+       paren (close paren which do not have matching open
+       paren). Then delete all trailing whitespaces."
   (with-temp-buffer
     (save-excursion (insert str))
     (if omni-query
@@ -220,7 +227,14 @@ whitespaces.
 (defun git-complete--root-dir ()
   "Find the root directory of this git repo. If the current
 directory is not under a git repo, raises an error. This function
-caches the result per buffer."
+is cached, thus
+
+1. Open a file NOT under a git repo
+2. `git init' the directory
+3. invoke `git-complete'
+
+fails (but it may be a very rare case, and `git-complete' does
+not work well, even if it does not raise an error)."
   (or git-complete--root-dir
       (setq git-complete--root-dir
             (and buffer-file-name (locate-dominating-file buffer-file-name ".git")))))
@@ -228,7 +242,8 @@ caches the result per buffer."
 (defvar-local git-complete--extensions nil) ; cache
 (defun git-complete--extensions ()
   "Returns a list of extensions to which candidates should be
-limited."
+limited. This function is cached, thus changing extensions after
+opening files may lead an unexpected result."
   (and git-complete-limit-extension
        (or git-complete--extensions
            (setq git-complete--extensions
@@ -236,9 +251,9 @@ limited."
                      (list (file-name-extension buffer-file-name)))))))
 
 (defun git-complete--beginning-of-next-word (current-start)
-  "Returns the beginning position of next word (according to
-git-complete-omni-completion-type) in the line, or nil if not
-found."
+  "Returns the beginning position of the next \"word\" (according
+to `git-complete-omni-completion-type') in the line, or nil if
+not found."
   (save-excursion
     (let ((lim (point))
           (case-fold-search nil))
@@ -284,14 +299,24 @@ Example:
 (defun git-complete--diff-unmatched-parens (lst1 lst2)
   "Internal function for
 `git-complete--replace-substring'. Compute difference of two
-results of `git-complete--find-unmatched-parens'.
+results from `git-complete--find-unmatched-parens', in the
+form (((EXTRA_OPEN . EXPECTED_CLOSE) ...) . ((EXTRA_CLOSE
+. EXPECTED_OPEN) ...)).
 
 Example:
-- (git-complete--diff-parens
-   (git-complete--parse-parens \"(\")
-   (git-complete--parse-parens \"}\")) => (nil . ((?\} . ?\{) (?\) . ?\()))
-When replacing \"(\" with \"}\", we need an extra \"{\" and a
-\"(\", to keep the balance."
+- result 1: (git-complete--find-unmatched-parens \"([}\")
+  => (((?\[ . ?\]) (?\( . ?\))) . ((?\} . ?\{)))
+- result 2: (git-complete--find-unmatched-parens \"((]\")
+  => (((?\( . ?\)) (?\( . ?\))) . ((?\] . ?\[)))
+- difference: (git-complete--diff-unmatched-parens <result 1> <result 2>)
+  => (((?\{ . ?\}) (?\( . ?\))) . ((?\] . ?\[) (?\] . ?\[)))
+
+Which means, when replacing \"([}\" with \"((]\", we need an
+extra \"})\" and a \"[[\" to keep the balance. Since:
+- } is deleted (thus there will be an extra {, which expects a } to be inserted)
+- ( is added (thus there will be an extra (, which expects a ) to be inserted)
+- [ is deleted
+- ] is added"
   (let ((existing-opens (car lst1))
         (added-opens (car lst2))
         (existing-closes (cdr lst1))
@@ -318,13 +343,15 @@ When replacing \"(\" with \"}\", we need an extra \"{\" and a
 (defun git-complete--replace-substring (from to replacement &optional no-newline)
   "Replace region between FROM TO with REPLACEMENT and move the
 point just after the inserted text. Unlike `replace-string', this
-function tries to keep parenthesis balanced and indent the
+function tries to keep the parenthesis balanced by inserting or
+deleting some parens (along with some newlines), and indent the
 inserted text (the behavior may disabled via customize
 options). When NO-NEWLINE is specified, extra newlines are not
 inserted."
   (let ((deleted (buffer-substring from to)) end)
     (delete-region from to)
     (insert replacement)
+    ;; (point is kept at the end of the replacement text)
     (save-excursion
       (let ((newline (if no-newline "" "\n"))
             close-parens-are-inserted)
@@ -340,6 +367,10 @@ inserted."
                       (mapconcat 'char-to-string (mapcar 'cdr closes) (if no-newline "" "\n")))
               (setq close-parens-are-inserted t))
             (while opens
+              ;; if extra close parens are just after the replacement
+              ;; text, delete them to keep the balance, instead of
+              ;; inserting extra open parens at the beginning of the
+              ;; replacement text
               (if (looking-at (concat "[\s\t\n]*" (char-to-string (caar opens))))
                   (replace-match "")
                 (save-excursion (goto-char from) (insert (char-to-string (cdar opens)))))
@@ -356,11 +387,12 @@ inserted."
 ;; * get candidates via git grep
 
 (defun git-complete--make-hist-trie (lst-of-lst)
-  "Internal function for `git-complete--filter-candidates'. Takes
-a List[List[String]], and makes a trie-like tree, whose nodes
-are (CHILDREN . COUNT) where CHILDREN is a hash map of String ->
-Node. Last element in each List[String] is expected to be an
-empty string."
+  "Internal function for `git-complete--filter-candidates'. Take
+a list of completions and make a trie-like tree. Each completions
+must be a list of words, with an empty string supplied at the end
+of the list. Returned trie is a cons cell of the form (CHILDREN
+. COUNT), where CHILDREN is a hash map of String -> Trie, and
+COUNT is the number of leaf nodes under the node."
   (let ((trie (cons (make-hash-table :test 'equal) 0)) current-node child-node)
     (dolist (lst lst-of-lst)
       (setq current-node trie)
@@ -377,7 +409,8 @@ empty string."
     trie))
 
 (defun git-complete--dump-trie (trie)
-  "FOR DEBUG USE."
+  "FOR DEBUG USE. Turn a trie into a human-readable list of
+string."
   (let ((res nil))
     (maphash (lambda (k v) (push (cons k (git-complete--dump-trie v)) res)) (car trie))
     (cons (cdr trie) res)))
@@ -387,10 +420,11 @@ empty string."
 (defun git-complete--filter-candidates-internal (trie threshold exact-p &optional node-key)
   "Internal recursive function for
 `git-complete--filter-candidates'. Traverse a trie returned by
-`git-complete--make-hist-trie' and finds list of \"suitable\"
+`git-complete--make-hist-trie' and finds a list of \"suitable\"
 completion candidates due to THRESHOLD and EXACT-P, returned as a
-list of the form ((STRING EXACT-P . COUNT) ...). Optional arg
-NODE-KEY is used internally."
+list of the form ((STRING EXACT-P . COUNT) ...). EXACT-P is
+non-nil if the completion ends at the end of the line. Optional
+arg NODE-KEY is used internally, during the traversal."
   (when (and trie (>= (cdr trie) threshold))
     (let ((children
            (apply 'nconc
@@ -411,10 +445,13 @@ NODE-KEY is used internally."
 (defun git-complete--filter-candidates (lst &optional omni-query threshold filter-regex)
   "Extract a sorted list of \"suitable\" completion candidates of
 the form (STRING WHOLE-LINE-P EXACT-P . COUNT) from a string list
-LST. If OMNI-QUERY is specified, candidates are trimmed by
-`git-complete--trim-candidate'. Otherwise candidates are not
-trimmed and result is limited to exact matches. When FILTER-REGEX
-is specified, each candidates must match the regex."
+LST. WHOLE-LINE-P is non-nil, if OMNI-QUERY is
+unspecified. Otherwise, if OMNI-QUERY is specified, candidates
+are trimmed by `git-complete--trim-candidate' before
+filtering. If WHOLE-LINE-P is unspecified, candidates are not
+trimmed and results are limited to \"exact\" matches. When
+FILTER-REGEX is specified, candidates not mathing the regex are
+dropped before filtering."
   (setq lst
         (cl-remove-if
          (lambda (s) (string= s ""))
@@ -430,9 +467,8 @@ is specified, each candidates must match the regex."
             (sort filtered (lambda (a b) (> (cddr a) (cddr b)))))))
 
 (defun git-complete--get-query-candidates (query nextline-p)
-  "Get completion candidates. This function calls `git grep'
-command to get lines matching QUERY and returns as a list of
-string."
+  "A wrapper function of `git grep'. Call `git grep' with QUERY,
+and returns the result as a list of strings."
   (when (git-complete--root-dir)
     (let* ((default-directory (git-complete--root-dir))
            (ignore-case (if (eq git-complete-ignore-case 'dwim)
@@ -463,7 +499,8 @@ string."
   "Keymap for git-complete popup menu.")
 
 (defun git-complete--internal (&optional omni-from)
-  "Internal recursive function for git-complete."
+  "Internal recursive function for git-complete. Recursion is
+used during omni-completion, with OMNI-FROM argument specified."
   (let* ((next-line-p
           (looking-back "^[\s\t]*"))
          (query
