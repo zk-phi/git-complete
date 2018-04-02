@@ -64,6 +64,13 @@ open parens, and avoid inserting extra close parens)."
   :type 'boolean
   :group 'git-complete)
 
+(defcustom git-complete-prefer-slurp-close-parens t
+  "When non-nil and the autopair feature is enabled, git-complete
+tries to delete extra close parens, instead of inserting extra
+open parens."
+  :type 'boolean
+  :group 'git-complete)
+
 (defcustom git-complete-lispy-modes
   '(lisp-mode emacs-lisp-mode scheme-mode
               lisp-interaction-mode gauche-mode scheme-mode
@@ -367,11 +374,8 @@ inserted."
                       (mapconcat 'char-to-string (mapcar 'cdr closes) (if no-newline "" "\n")))
               (setq close-parens-are-inserted t))
             (while opens
-              ;; if extra close parens are just after the replacement
-              ;; text, delete them to keep the balance, instead of
-              ;; inserting extra open parens at the beginning of the
-              ;; replacement text
-              (if (looking-at (concat "[\s\t\n]*" (char-to-string (caar opens))))
+              (if (and git-complete-prefer-slurp-close-parens
+                       (looking-at (concat "[\s\t\n]*" (char-to-string (caar opens)))))
                   (replace-match "")
                 (save-excursion (goto-char from) (insert (char-to-string (cdar opens)))))
               (pop opens))))
