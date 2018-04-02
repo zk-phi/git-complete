@@ -337,7 +337,7 @@ inserted."
             (when closes
               (insert newline
                       (if (memq major-mode git-complete-lispy-modes) "" newline)
-                      (apply 'string (mapcar 'cdr closes)))
+                      (mapconcat 'char-to-string (mapcar 'cdr closes) (if no-newline "" "\n")))
               (setq close-parens-are-inserted t))
             (while opens
               (if (looking-at (concat "[\s\t\n]*" (char-to-string (caar opens))))
