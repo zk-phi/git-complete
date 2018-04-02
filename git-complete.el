@@ -327,7 +327,7 @@ inserted."
     (insert replacement)
     (save-excursion
       (let ((newline (if no-newline "" "\n"))
-            skip-newline)
+            close-parens-are-inserted)
         (when git-complete-enable-autopair
           (let* ((res (git-complete--diff-unmatched-parens
                        (git-complete--find-unmatched-parens deleted)
@@ -338,13 +338,14 @@ inserted."
               (insert newline
                       (if (memq major-mode git-complete-lispy-modes) "" newline)
                       (apply 'string (mapcar 'cdr closes)))
-              (setq skip-newline t))
+              (setq close-parens-are-inserted t))
             (while opens
               (if (looking-at (concat "[\s\t\n]*" (char-to-string (caar opens))))
                   (replace-match "")
                 (save-excursion (goto-char from) (insert (char-to-string (cdar opens)))))
               (pop opens))))
-        (unless (or no-newline skip-newline) (insert "\n")))
+        (unless (or no-newline close-parens-are-inserted)
+          (insert "\n")))
       (setq end (point)))
     (indent-region from end)
     (unless no-newline
