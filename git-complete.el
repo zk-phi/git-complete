@@ -71,13 +71,19 @@ open parens."
   :type 'boolean
   :group 'git-complete)
 
+(defcustom git-complete-empty-line-before-close-parens t
+  "When non-nil and the autopair feature is enabled, git-complete
+inserts an extra newline, before inserting extra close parens."
+  :type 'boolean
+  :group 'git-complete)
+
 (defcustom git-complete-lispy-modes
   '(lisp-mode emacs-lisp-mode scheme-mode
               lisp-interaction-mode gauche-mode scheme-mode
               clojure-mode racket-mode egison-mode)
-  "List of lisp-like language modes. Newline is not inserted
-after the point by when `git-complete-enable-autopair', in the
-modes."
+  "List of major-mode in which
+`git-complete-empty-line-before-close-parens' should be disabled
+automatically."
   :type '(repeat symbol)
   :group 'git-complete)
 
@@ -369,9 +375,11 @@ inserted."
                  (closes (car res))
                  (opens (cdr res)))
             (when closes
-              (insert newline
-                      (if (memq major-mode git-complete-lispy-modes) "" newline)
-                      (mapconcat 'char-to-string (mapcar 'cdr closes) (if no-newline "" "\n")))
+              (insert newline)
+              (when (and git-complete-empty-line-before-close-parens
+                         (not (memq major-mode git-complete-lispy-modes)))
+                (insert newline))
+              (insert (mapconcat 'char-to-string (mapcar 'cdr closes) (if no-newline "" "\n")))
               (setq close-parens-are-inserted t))
             (while opens
               (if (and git-complete-prefer-slurp-close-parens
