@@ -375,7 +375,7 @@ inserted."
               (setq close-parens-are-inserted t))
             (while opens
               (if (and git-complete-prefer-slurp-close-parens
-                       (looking-at (concat "[\s\t\n]*" (char-to-string (caar opens)))))
+                       (looking-at (concat "[\s\t\n]*" (char-to-string (caar opens)) "\n?")))
                   (replace-match "")
                 (save-excursion (goto-char from) (insert (char-to-string (cdar opens)))))
               (pop opens))))
