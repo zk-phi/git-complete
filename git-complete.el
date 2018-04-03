@@ -87,6 +87,22 @@ automatically."
   :type '(repeat symbol)
   :group 'git-complete)
 
+(defcustom git-complete-whole-line-completion-with-newline t
+  "When non-nil, a newline is inserted after inserting a
+whole-line completion. If the autopair feature is enabled, two or
+more newlines may also be inserted before/after parens."
+  :type 'boolean
+  :group 'git-complete)
+
+(defcustom git-complete-omni-completion-with-newline 'end-of-line
+  "When non-nil, a newline is inserted after inserting an
+\"exact\" omni completion. When `end-of-line', insert only if the
+point is at the end of the line. If the autopair feature is
+enabled, two or more newlines may also be inserted before/after
+parens."
+  :type 'boolean
+  :group 'git-complete)
+
 ;; completion
 
 (defcustom git-complete-threshold 0.05
@@ -353,20 +369,20 @@ extra \"})\" and a \"[[\" to keep the balance. Since:
     (cons (nconc (mapcar (lambda (a) (cons (cdr a) (car a))) deleted-closes) added-opens)
           (nreverse (nconc (mapcar (lambda (a) (cons (cdr a) (car a))) deleted-opens) added-closes)))))
 
-(defun git-complete--replace-substring (from to replacement &optional no-newline)
+(defun git-complete--replace-substring (from to replacement &optional newline)
   "Replace region between FROM TO with REPLACEMENT and move the
 point just after the inserted text. Unlike `replace-string', this
 function tries to keep the parenthesis balanced by inserting or
 deleting some parens (along with some newlines), and indent the
 inserted text (the behavior may disabled via customize
-options). When NO-NEWLINE is specified, extra newlines are not
+options). When NEWLINE is specified, extra newlines may be
 inserted."
   (let ((deleted (buffer-substring from to)) end)
     (delete-region from to)
     (insert replacement)
     ;; (point is kept at the end of the replacement text)
     (save-excursion
-      (let ((newline (if no-newline "" "\n"))
+      (let ((newline (if newline "\n" ""))
             close-parens-are-inserted)
         (when git-complete-enable-autopair
           (let* ((res (git-complete--diff-unmatched-parens
@@ -379,7 +395,7 @@ inserted."
               (when (and git-complete-empty-line-before-close-parens
                          (not (memq major-mode git-complete-lispy-modes)))
                 (insert newline))
-              (insert (mapconcat 'char-to-string (mapcar 'cdr closes) (if no-newline "" "\n")))
+              (insert (mapconcat 'char-to-string (mapcar 'cdr closes) newline))
               (setq close-parens-are-inserted t))
             (while opens
               (if (and git-complete-prefer-slurp-close-parens
@@ -387,11 +403,10 @@ inserted."
                   (replace-match "")
                 (save-excursion (goto-char from) (insert (char-to-string (cdar opens)))))
               (pop opens))))
-        (unless (or no-newline close-parens-are-inserted)
-          (insert "\n")))
+        (unless close-parens-are-inserted (insert newline)))
       (setq end (point)))
     (indent-region from end)
-    (unless no-newline
+    (when newline
       (forward-line 1)
       (funcall indent-line-function)
       (back-to-indentation))))
@@ -555,7 +570,13 @@ used during omni-completion, with OMNI-FROM argument specified."
                 :isearch git-complete-enable-isearch
                 :keymap git-complete--popup-menu-keymap)
              (git-complete--replace-substring
-              (if whole-line-p (point-at-bol) (point)) (point) str (not exact-p))
+              (if whole-line-p (point-at-bol) (point)) (point) str
+              (or (and git-complete-whole-line-completion-with-newline
+                       whole-line-p)
+                  (and git-complete-omni-completion-with-newline
+                       exact-p
+                       (or (not (eq git-complete-omni-completion-with-newline 'end-of-line))
+                           (eolp)))))
              (when (or (if whole-line-p
                            git-complete-repeat-line-completion
                          git-complete-repeat-omni-completion) ; backward compatiblity
