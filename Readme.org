@@ -18,10 +18,10 @@ may want to insert.
   unlike other completion engines (rather like snippet engines)
 
 - be used as an "omni (smart) completion" engine, i.e. =git-complete=
-  tries to suggest expressions you may want to insert next, according
-  to the context, *even when you don't remember it*, by grepping your
-  project (class methods after a class name, typical argument for a
-  function, for examples)
+  tries to suggest expressions you may want to insert next (class
+  methods after a class name, typical argument for a function, for
+  examples), according to the context, *even when you don't remember
+  it*, by analyzing your project
 
 - be used with *no per-language configurations or dictionaries*,
   unlike snippet engines or omni-completion engines
@@ -29,10 +29,6 @@ may want to insert.
 =git-complete= CAN'T:
 
 - complete expressions which has not been used in the git project yet
-
-- start completion automatically, since it's a bit laggy to git grep
-  over the git repo (especially for the first invokation in the
-  project)
 
 - be 100% accurate, since =git-complete= has no knowledge about the
   language you are coding in
@@ -63,21 +59,32 @@ https://github.com/hitode909/emacs-auto-programming
 ** Quickstart
 *** Installation
 
+Load the library
+
 #+begin_src emacs-lisp
   (require 'git-complete)
 #+end_src
 
-and (optionally) bind some keys.
+and =git-complete= command is available while editing files under a
+git repo.
+
+You may want to bind some keys globally with =global-set-key=:
 
 #+begin_src emacs-lisp
   (global-set-key (kbd "C-c C-c") 'git-complete)
 #+end_src
 
+or locally with =define-key=:
+
+#+begin_src emacs_lisp
+  (define-key emacs-lisp-mode-map (kbd "C-c C-c") 'git-complete)
+#+end_src
+
 *** Examples
 
-(Consider "|" as the cursor in following examples)
+(Consider "|" as the cursor in the following examples)
 
-Open a file under a git repo, and =M-x git-complete=,
+Open a file under a git repo, and invoking =M-x git-complete=
 
 - after a part of a package name:
 
@@ -92,23 +99,36 @@ Open a file under a git repo, and =M-x git-complete=,
     |
   #+end_src
 
+- after some words:
+
+  #+begin_src javascript
+    import router dom|
+  #+end_src
+
+  completes a line which contains all the words
+
+  #+begin_src javascript
+    import { Route } from 'react-router-dom';
+    |
+  #+end_src
+
 - after a constructor:
 
   #+begin_src javascript
     var foo = moment().|
   #+end_src
 
-  suggests method names frequently used in your project.
+  suggests method names frequently used in your project,
 
   #+begin_src javascript
-    var foo = moment().format(|
+    var foo = moment().format(|)
   #+end_src
 
-  and =M-x git-complete= (again) suggests typical arguments to the
-  method frequently used in your project.
+  and =M-x git-complete= again suggests typical arguments to the
+  method frequently passed to =format= in your project.
 
   #+begin_src javascript
-    var foo = moment().format("YYYY-MM-DD HH:mm:ss"|
+    var foo = moment().format("YYYY-MM-DD HH:mm:ss"|)
   #+end_src
 
 - after a newline:
@@ -133,40 +153,107 @@ Open a file under a git repo, and =M-x git-complete=,
   parenthesis balance during completion
 
 - =git-complete-ignore-case= : either to use =--ignore-case= option or
-  not when git grepping
+  not when =git grep=-ing
+
+- =git-complete-repeat-completion= : either to repeat git-complete
+  automatically or not after a successful completion
+
+- =git-complete-limit-extension= : whether to limit extension of the
+  files to search completions in, or not
+
+  - =git-complete-major-mode-extensions-alist= : per major-mode
+    extensions list used when =git-complete-limit-extension= is
+    enabled
+
+- =git-complete-fallback-function= : a function called when
+  git-complete is invoked but no completions are found
+
+- =git-complete-enable-isearch= : whether to start incremental search
+  automatically or not when selecting completions
 
 See "How it works" section for details:
 
 - =git-complete-threshold=
 - =git-complete-whole-line-completion-threshold=
 - =git-complete-next-line-completion-threshold=
+- =git-complete-omni-completion-type=
+- =git-complete-enable-fuzzy-whole-line-completion=
 - =git-complete-repeat-completion=
 
 ** How it works
+*** Types of completion candidates
 
-There are two methods to collect completions:
+Each completion candidates has a property called "whole-line"-ness.
+
+Completions are inserted in different ways due to whether it's a
+whole-line completion or not.
+
+**** Whole-line completion
+
+Example:
+
+: use Digest::SHA;\n
+
+whole-line completions are like import statements, inserted by
+replacing the whole current line.
+
+Before:
+
+#+begin_src perl
+  SHA|
+#+end_src
+
+After:
+
+#+begin_src perl
+  use Digest::SHA;
+  |
+#+end_src
+
+**** Non whole-line completion
+
+Example:
+
+: format(
+
+Non whole-line completions are like method name or arguments, just
+inserted at the cursor position
+
+Before:
+
+#+begin_src javascript
+  var foo = moment().|
+#+end_src
+
+After:
+
+#+begin_src javascript
+  var foo = moment().format(|)
+#+end_src
+
+(Note: close paren is inserted by the =git-complete-autopair= feature)
+
+*** Completion collection algorithm
+
+There are roughly two ways to collect completions:
 
 - current-line completion
 - next-line completion
 
-and each completions are classified into two types:
+and current-line completion has a fallback method called "omni"
+completion (and "fuzzy" completion, as a part of "omni" completion).
 
-- whole-line completion
-- omni completion
-
-User is prompted to select one of the completions, and the selected
-completion is inserted to the buffer in different ways according to
-its type.
-
-*** Completion collection
 **** Current-line completion
 
-example condition:
+If some characters exist before the cursor in the current line,
+"curent-line" completion works.
+
+Example situation:
 
 : React|            * consider | as the cursor
 
-1. Collect lines containing "React" in your git repo, by =git grep=
-   -ing with "React"
+1. Collect lines which contains "React" in your git repo, via
+   =git-grep=.
 
    : $ git grep -F -h "React"
    : import React from 'react';
@@ -184,23 +271,23 @@ example condition:
    :     ReactDOM.render(<AnotherComponent />);
    : ...
 
-2. If some lines found in 1. appear "commonly" (as defined by
-   =git-complete-whole-line-completion-threshold=), they are added to
-   the completions list, as "whole-line" completions.
+2. If some identical lines appear frequently enough (as defined by
+   =git-complete-whole-line-completion-threshold=) in the result, they
+   are added to the completions list, as "whole-line" completions.
 
-   : |                                                 | frequency | type       |
-   : +-------------------------------------------------+-----------+------------|
-   : | export default class extends React.Component{\n |       60% | whole-line |
-   : | import React from 'react';\n                    |       30% | whole-line |
-   : | ...                                             |       ... |        ... |
+   |                                                | frequency | whole-line |
+   +------------------------------------------------|-----------|------------|
+   | export default class extends React.Component { |       60% |        yes |
+   | import React from 'react';                     |       30% |        yes |
+   | ...                                            |       ... |        ... |
 
-3. Trim each lines found in 1. as follows:
+3. Trim each lines of the result (of the step 1.) as follows:
 
-   - Find the query string ("React" in this case) inside the line and
-     remove characters before the query and the query itself.
+   - Find the query string ("React" in this case) inside the line, and
+     remove characters before the query (including the query itself).
 
    - If the line has more close parens than open parens, remove
-     characters after the innermost matching close paren.
+     characters after the last matching close paren.
 
    : from 'react';
    : .Component {
@@ -217,43 +304,274 @@ example condition:
    : DOM.render(<AnotherComponent />);
    : ...
 
-4. Drop some words from the end of each lines until it gets "common"
-   enough (as defined in =git-complete-threshold=), and add to the
-   completions list as "omni" completions.
+4. Drop some words from the end of each trimmed lines until it gets
+   common enough (as defined by =git-complete-threshold=), and add to
+   the completions list as non whole-line completions.
 
-   : |                                                  | frequency | type       |
-   : +--------------------------------------------------+-----------+------------|
-   : | export default class extends React.Component {\n |       60% | whole-line |
-   : | import React from 'react';\n                     |       30% | whole-line |
-   : | .Component {\n                                   |       60% |       omni |
-   : | from 'react';\n                                  |       30% |       omni |
-   : | DOM from 'react-dom';\n                          |        5% |       omni |
-   : | DOM.render(                                      |        5% |       omni |
-   : | ...                                              |       ... |        ... |
+   |                                                  | frequency | whole-line |
+   +--------------------------------------------------|-----------|------------|
+   | export default class extends React.Component {\n |       60% |        yes |
+   | import React from 'react';\n                     |       30% |        yes |
+   | .Component {\n                                   |       60% |         no |
+   | from 'react';\n                                  |       30% |         no |
+   | DOM from 'react-dom';\n                          |        5% |         no |
+   | DOM.render(                                      |        5% |         no |
+   | ...                                              |       ... |        ... |
 
-   (argument to =ReactDOM.render= is dropped, since they does not
-   appear "commonly")
+   (Note that arguments to =ReactDOM.render= -- "<MyComponent />" and
+   "<AnotherComponent />", are dropped, since they are not "common
+   enough")
 
-   If some lines did not get "common" enough even if all the words are
-   dropped except for one, they are not added to the completions list.
+   If some lines get empty, they are just ignored.
 
-5. If no completions are found, shorten the query by one subword
-   (configurable via =git-cmopletion-omni-completion-type=) and =git
-   grep= again, then back to the step 3. .
+5. If some completions are found in the process above, query user to
+   select a completion in the list and insert the selected
+   one. Otherwise fall back to "omni" completion.
 
-   example condition:
+   Before:
 
-   : var foo = bar(MyClass.|
+   : React|
 
-   The query "var foo = bar(MyClass." is too specific to find some
-   "common" lines, thus shortened to "foo = bar(MyClass.",
-   "bar(MyClass." then "MyClass." which may give some "common" method
-   names of the class "MyClass".
+   After:
 
-   Note that this case does not give any "whole-line" completions,
-   since the step 2. is skipped.
+   : import React from 'react';
+   : |
+
+**** Omni completion
+
+Example situation 1:
+
+#+begin_src javascript
+  var foo = bar(MyClass.|)
+#+end_src
+
+The query "var foo = bar(MyClass" is too specific to find some
+"common" lines in current-line completion. But it's clear that the
+user wants to insert a class-method name of "MyClass".
+
+Example situation 2:
+
+#+begin_src javascript
+  import 'react-router-dom'|
+#+end_src
+
+The query "import 'react-router-dom'" does not appear in the repo,
+since all import statements have the form:
+
+#+begin_src text
+  import { <symbol>, ... } from <package-name>;
+#+end_src
+
+But it's clear that the user wants to import some symbols from the
+'react-router-dom' package.
+
+***** The idea
+
+In omni completion, the query string is separated into two parts: the
+context part and the query part.
+
+By moving words from the query part to the context part by one,
+=git-complete= tries to find the longest query which gives some
+suitable completions. The context part affects "whole-line"-ness of
+the completions.
+
+NOTE: This behavior may be changed or disabled via
+=git-complete-omni-completion-type=.
+
+***** The process
+
+1. Let the initial =query= be the query fallen back from the
+   "current-line completion" (i.e. "var foo = bar(MyClass." for the
+   example 1, and "import 'react-router-dom'" for the example 2) and
+   let the initial =context= be an empty string
+
+2. Until git-complete finds some completion candidates, repeat the
+   following steps:
+
+   1. Move a word from the =query= part to the =context= part
+
+      For example 1:
+
+      | Iteration | Context                            | Query                    |
+      |-----------+------------------------------------+--------------------------|
+      |         0 |                                    | "var foo = bar(MyClass." |
+      |         1 | "var"                              | "foo = bar(MyClass."     |
+      |         2 | "var", "foo ="                     | "bar(MyClass."           |
+      |         3 | "var", "foo =", "bar("             | "MyClass."               |
+      |         4 | "var", "foo =", "bar(", "MyClass." | ""                       |
+
+      For example 2:
+
+      | Iteration | Context                        | Query                       |
+      |-----------+--------------------------------+-----------------------------|
+      |         0 |                                | "import 'react-router-dom'" |
+      |         1 | "import"                       | "'react-router-dom'"        |
+      |         2 | "import", "'react-router-dom'" | "                           |
+
+      If the =query= gets empty before finding some suitable
+      completions, omni completion also fails.
+
+   2. =git grep= with the =query= part:
+
+      For example 1 (iteration 3):
+
+      : $ git grep -F -h "MyClass."
+      :   var awesomeVariable = MyClass.fooMethod(anArgument);
+      : var anotherVariable = MyClass.barMethod(anotherArgument);
+      : // Following line adds a feature to MyClass.
+      : MyClass.prototype.foo = greatFunction;
+      :     fooFunction(MyClass.fooMethod(yetAnotherArgument).toString());
+      : var bar = new AnotherClass(MyClass.barMethod());
+      : ...
+
+      For example 2 (iteration 2):
+
+      : $ git grep -F -h "'react-router-dom'"
+      :     'react-router-dom': '^4.0.0',
+      : import { Route } from 'react-router-dom';
+      : import { Link } from 'react-router-dom';
+      : import { HashRouter } from 'react-router-dom';
+      : // use 'react-router-dom' for routing URLs to components.
+      : import { Route, Link } from 'react-router-dom';
+      : import { Route } from react-router-dom';
+      : ...
+
+   3. Among the lines in the result of the step 2, extract lines that
+      have all the words in the context part in it.
+
+      For example 1:
+
+      No lines contain all the context words ("var", "foo =", "bar(",
+      "MyClass.") in it.
+
+      For example 2:
+
+      some lines
+
+      : import { Route } from 'react-router-dom';
+      : import { Link } from 'react-router-dom';
+      : import { HashRouter } from 'react-router-dom';
+      : import { Route, Link } from 'react-router-dom';
+      : import { Route } from react-router-dom';
+
+      have the context word "import" in it.
+
+      Other lines (looks like comment and =package.json= line) are
+      dropped.
+
+   4. If some identical lines appear frequently (as defined by
+      =git-complete-whole-line-completion-threshold=) in the result of
+      the step 3, they are added to the completions list as
+      "whole-line" completions.
+
+      NOTE: This behavior may be disabled via
+      =git-complete-enable-fuzzy-whole-line-completion=
+
+      For example 1:
+
+      |   | frequency | whole-line |
+      |---+-----------+------------|
+      |   |           |            |
+
+      No "whole-line" completion found for the example 1.
+
+      For example 2:
+
+      |                                                 | frequency | whole-line |
+      |-------------------------------------------------+-----------+------------|
+      | import { Route } from 'react-router-dom';       |       40% | yes        |
+      | import { Link } from 'react-router-dom';        |       20% | yes        |
+      | import { HashRouter } from 'react-router-dom';  |       20% | yes        |
+      | import { Route, Link } from 'react-router-dom'; |       20% | yes        |
+      | ...                                             |       ... | ...        |
+
+   5. Trim each lines in the result of the step 2, as like the step 3
+      of "current-line completion":
+
+      - Find the query string inside the line, and remove characters
+        before the query (including the query itself).
+
+      - If the line has more close parens than open parens, remove
+        characters after the last matching close paren.
+
+      For example 1:
+
+      : .fooMethod(anArgument);
+      : .barMethod(anotherArgument);
+      : prototype.foo = greatFunction;
+      : .fooMethod(yetAnotherArgument).toString()
+      : .barMethod()
+      : ...
+
+      For example 2:
+
+      : : '^4.0.0',
+      : ;
+      : ;
+      : ;
+      : for routing URLs to components.
+      : ;
+      : ;
+      : ...
+
+   6. Drop some words from the end of each trimmed lines, as like the
+      step 4 of "current-line copmletion", and add to the completions
+      list as non whole-line completions.
+
+      If some lines get empty, they are just ignored.
+
+      For example 1:
+
+      |             | frequency | whole-line |
+      |-------------+-----------+------------|
+      | .fooMethod( |       33% | no         |
+      | .barMethod( |       33% | no         |
+      | ...         |       ... | ...        |
+
+      Note that arguments to the methods are dropped since they do not
+      appear "commonly".
+
+      For example 2:
+
+      |                                                 | frequency | whole-line |
+      |-------------------------------------------------+-----------+------------|
+      | import { Route } from 'react-router-dom';       |       40% | yes        |
+      | import { Link } from 'react-router-dom';        |       20% | yes        |
+      | import { HashRouter } from 'react-router-dom';  |       20% | yes        |
+      | import { Route, Link } from 'react-router-dom'; |       20% | yes        |
+      | ;                                               |       70% | no         |
+      | ...                                             |       ... | ...        |
+
+3. If some completions are found in the process above, query user to
+   select a completion in the list and insert the selected
+   one. Otherwise fall back to "omni" completion.
+
+   For example 1:
+
+   Before:
+
+   : var foo = bar(MyClass.|)
+
+   After:
+
+   : var foo = bar(MyClass.barMethod(|))
+
+   For example 2:
+
+   Before:
+
+   : import 'react-router-dom'|
+
+   After:
+
+   : import { Route, Link } from 'react-router-dom';
+   : |
 
 **** Next-line completion
+
+If no characters exist before the cursor in the current line,
+"next-line" completion works, which use the previous line as the
+query.
 
 example condition:
 
@@ -291,53 +609,9 @@ example condition:
    : | use utf8;\n             |       20% | whole-line |
    : | ...                     |       ... |        ... |
 
-   Note that next-line completion does not give any "omni"
-   completions.
-
-*** Completion insertion
-**** Whole-line completion
-
-example condition:
-
-: React|
-
-and the selected completion is:
-
-: export default class extends React.Component {
-
-1. Delete all characters in the line
-
-   : |
-
-2. Insert the completion with a newline and indentation
-
-   : export default class extends React.Component {
-   :     |
-
-3. Add some close parens as needed (See "autopair" section for details)
-
-   : export default class extends React.Component {
-   :     |
-   : }
-
-**** Omni completion
-
-example condition:
-
-: var foo = moment().format|
-
-and the selected completion is:
-
-: ("YYYY-MM-DD HH:mm:ss",
-
-1. Just insert the completion
-
-   : var foo = moment().format("YYYY-MM-DD HH:mm:ss",|
-
-2. Add some close parens as needed (See "autopair" section for
-   details) after the cursor
-
-   : var foo = moment().format("YYYY-MM-DD HH:mm:ss",|)
+3. If no completions are found, shorten the query by one word, as like
+   "omni completion". Otherwise, if some completions are found, query
+   user to select one and insert it.
 
 ** "autopair" feature
 
@@ -439,3 +713,33 @@ always kept during completion.
 
   : result:
   : var foo = my_awesome_function(an_awesome_argument|)
+
+** Contributions
+
+Contributions are welcome!
+
+You may contribute to the project in different ways:
+
+- Improve my English
+
+  Since I'm not an English speaker, my documents may not be very
+  fluent and it will be a great contribution to fix them!
+
+- Feature request / implementation
+
+  You may send me a feature request in the "issues" section of this
+  repository. If you can implement by yourself, it's *super* helpful
+  to send me a "pull request" instead! Note that in some cases, you
+  and me need to discuss about the new feature before implementing /
+  merging it (to make git-complete better).
+
+- Bug report / fix
+
+  You may report me a bug in "issues" section of this repository. If
+  you can fix it by yourself, it's *sooo nice* to send me a "pull
+  request" instead!
+
+- Refactoring
+
+  git-complete now got fairly complex, and it will be great if some
+  ideas improve the maintainablity / readablity.
