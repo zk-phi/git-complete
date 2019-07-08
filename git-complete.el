@@ -174,7 +174,7 @@ result."
   (replace-regexp-in-string
    (concat "^" (if left "[\s\t]*" "") "\\|" (if right "[\s\t]*" "") "$") "" str))
 
-(defun git-complete--trim-candidate (str omni-query)
+(defun git-complete--trim-candidate (str omni-query &optional no-leading-whitespaces)
   "Format candidate (= result from git-complete) by removing some
 leading/trailing characters.
 
@@ -186,7 +186,7 @@ whitespaces.
    i. Search OMNI-QUERY inside STR, and remove characters before
       the query and the query itself (if no matches are found,
       return an empty string) and delete all leading whitespaces
-      except for one.
+      except for one (zero if NO-LEADING-WHITESPACES is non-nil).
 
    ii. When STR has more close parens than open parens, remove
        all characters outside the unbalanced close parens (close
@@ -197,7 +197,7 @@ whitespaces.
     (if omni-query
         (if (search-forward omni-query nil t)
             (and (looking-at "\\([\s\t]\\)+[\s\t]")
-                 (goto-char (match-end 1)))
+                 (goto-char (match-end (if no-leading-whitespaces 0 1))))
           (goto-char (point-max)))
       (skip-chars-forward "\s\t"))
     (delete-region (point-min) (point))
@@ -401,7 +401,7 @@ NODE-KEY is used internally."
             ((not exact-p)
              (list (cons node-key (cons nil (cdr trie)))))))))
 
-(defun git-complete--filter-candidates (lst &optional omni-query threshold)
+(defun git-complete--filter-candidates (lst &optional omni-query threshold no-leading-ws)
   "Extract a sorted list of \"suitable\" completion candidates of
 the form (STRING WHOLE-LINE-P EXACT-P . COUNT) from a string list
 LST. If OMNI-QUERY is specified, candidates are trimmed by
@@ -410,7 +410,7 @@ trimmed and result is limited to exact matches."
   (setq lst
         (cl-remove-if
          (lambda (s) (string= s ""))
-         (mapcar (lambda (s) (git-complete--trim-candidate s omni-query)) lst)))
+         (mapcar (lambda (s) (git-complete--trim-candidate s omni-query no-leading-ws)) lst)))
   (let* ((trie (git-complete--make-hist-trie (mapcar (lambda (s) (split-string s "$\\|\\_>")) lst)))
          (threshold (* threshold (cdr trie)))
          (filtered (git-complete--filter-candidates-internal trie threshold (null omni-query))))
@@ -453,6 +453,7 @@ string."
 (defun git-complete--internal (&optional omni-from)
   "Internal recursive function for git-complete."
   (let* ((next-line-p (looking-back "^[\s\t]*"))
+         (no-leading-whitespaces (looking-back "[\s\t]"))
          (query (save-excursion
                   (when next-line-p (forward-line -1) (end-of-line))
                   (git-complete--trim-spaces
@@ -465,12 +466,14 @@ string."
                              (or git-complete-line-completion-threshold ; backward compatiblity
                                  (if next-line-p
                                      git-complete-next-line-completion-threshold
-                                   git-complete-whole-line-completion-threshold))))
+                                   git-complete-whole-line-completion-threshold))
+                             nil))
                           (unless next-line-p
                             (git-complete--filter-candidates
                              candidates query
                              (or git-complete-omni-completion-threshold ; backward compatiblity
-                                 git-complete-threshold))))))
+                                 git-complete-threshold)
+                             no-leading-whitespaces)))))
     (cond (filtered
            (cl-destructuring-bind (str whole-line-p exact-p . count)
                (popup-menu*
