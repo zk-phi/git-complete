@@ -440,8 +440,9 @@ string."
 
 (defun git-complete--internal (&optional omni-from)
   "Internal recursive function for git-complete."
-  (let* ((next-line-p (looking-back "^[\s\t]*"))
-         (no-leading-whitespaces (looking-back "[\s\t]"))
+  (let* ((bol (point-at-bol))
+         (next-line-p (looking-back "^[\s\t]*" bol))
+         (no-leading-whitespaces (looking-back "[\s\t]" bol))
          (query (save-excursion
                   (when next-line-p (forward-line -1) (end-of-line))
                   (git-complete--trim-spaces
