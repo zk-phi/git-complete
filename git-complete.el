@@ -18,7 +18,7 @@
 
 ;; Author: zk_phi
 ;; URL: http://hins11.yu-yake.com/
-;; Version: 0.0.3
+;; Version: 0.0.4
 ;; Package-Requires: ((popup "0.4"))
 
 ;; Load this script
@@ -44,6 +44,7 @@
 ;; 0.0.1 add option git-complete-repeat-completion
 ;; 0.0.2 add option git-complete-threshold
 ;; 0.0.3 add option git-complete-omni-completion-type
+;; 0.0.4 remove obsolete variables
 
 ;;; Code:
 
