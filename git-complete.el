@@ -145,17 +145,6 @@ candidate."
   :type 'boolean
   :group 'git-complete)
 
-(defvar git-complete-repeat-line-completion nil)
-(defvar git-complete-repeat-omni-completion nil)
-(defvar git-complete-omni-completion-threshold nil)
-(defvar git-complete-line-completion-threshold nil)
-(defvar git-complete-omni-completion-granularity nil)
-(make-obsolete-variable 'git-complete-repeat-line-completion 'git-complete-repeat-completion "0.0.1")
-(make-obsolete-variable 'git-complete-repeat-omni-completion 'git-complete-repeat-completion "0.0.1")
-(make-obsolete-variable 'git-complete-omni-completion-threshold 'git-complete-threshold "0.0.2")
-(make-obsolete-variable 'git-complete-line-completion-threshold 'git-complete-whole-line-completion-threshold "0.0.2")
-(make-obsolete-variable 'git-complete-omni-completion-granularity 'git-complete-omni-completion-type "0.0.3")
-
 ;; * utilities
 
 (defun git-complete--maphash (fn hash)
@@ -237,8 +226,7 @@ found."
     (let ((lim (point))
           (case-fold-search nil))
       (goto-char (or current-start (point-at-bol)))
-      (cl-case (or git-complete-omni-completion-granularity ; backward compatiblity
-                   git-complete-omni-completion-type)
+      (cl-case git-complete-omni-completion-type
         ((symbol)  (and (search-forward-regexp ".\\_<" lim t) (point)))
         ((word)    (and (search-forward-regexp ".\\<" lim t) (point)))
         ((subword) (and (search-forward-regexp ".\\<\\|[a-zA-Z]\\([A-Z]\\)[a-z]" lim t)
@@ -463,16 +451,14 @@ string."
          (filtered (nconc (when (or next-line-p (null omni-from))
                             (git-complete--filter-candidates
                              candidates nil
-                             (or git-complete-line-completion-threshold ; backward compatiblity
-                                 (if next-line-p
-                                     git-complete-next-line-completion-threshold
-                                   git-complete-whole-line-completion-threshold))
+                             (if next-line-p
+                                 git-complete-next-line-completion-threshold
+                               git-complete-whole-line-completion-threshold)
                              nil))
                           (unless next-line-p
                             (git-complete--filter-candidates
                              candidates query
-                             (or git-complete-omni-completion-threshold ; backward compatiblity
-                                 git-complete-threshold)
+                             git-complete-threshold
                              no-leading-whitespaces)))))
     (cond (filtered
            (cl-destructuring-bind (str whole-line-p exact-p . count)
@@ -483,12 +469,9 @@ string."
                 :keymap git-complete--popup-menu-keymap)
              (git-complete--replace-substring
               (if whole-line-p (point-at-bol) (point)) (point) str (not exact-p))
-             (when (or (if omni-from
-                           git-complete-repeat-omni-completion
-                         git-complete-repeat-line-completion) ; backward compatiblity
-                       (if (eq git-complete-repeat-completion 'newline)
-                           (looking-back "^[\s\t]*")
-                         git-complete-repeat-completion))
+             (when (if (eq git-complete-repeat-completion 'newline)
+                       (looking-back "^[\s\t]*" (point-at-bol))
+                     git-complete-repeat-completion)
                (let ((git-complete-fallback-function nil))
                  (git-complete--internal)))))
           ((and (not next-line-p) git-complete-omni-completion-type)
