@@ -135,7 +135,12 @@ Open a file under a git repo, and =M-x git-complete=,
 - =git-complete-ignore-case= : either to use =--ignore-case= option or
   not when git grepping
 
-See "How it works" section for details:
+- =git-complete-grep-function= : function used to grep over the
+  repo. git-complete by default uses =git grep= but you may tell
+  git-complete to use =rg= instead by setting this variable to
+  ='git-complete-ripgrep=
+
+See "How it works" section for the options below:
 
 - =git-complete-threshold=
 - =git-complete-whole-line-completion-threshold=

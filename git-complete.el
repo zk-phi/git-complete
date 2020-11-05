@@ -147,6 +147,14 @@ candidate."
   :type 'boolean
   :group 'git-complete)
 
+(defcustom git-complete-grep-function 'git-complete-git-grep
+  "Function used to grep over the git repo. You may assume that
+the function is called with `default-directory' set to the
+project root. The function must return result as a list of
+strings."
+  :type 'function
+  :group 'git-complete)
+
 ;; * utilities
 
 (defun git-complete--maphash (fn hash)
@@ -412,25 +420,46 @@ trimmed and result is limited to exact matches."
 command to get lines matching QUERY and returns as a list of
 string."
   (when (git-complete--root-dir)
-    (let* ((default-directory (git-complete--root-dir))
-           (ignore-case (if (eq git-complete-ignore-case 'dwim)
-                            (not (string-match "[A-Z]" query))
-                          git-complete-ignore-case))
-           (extensions (git-complete--extensions))
-           (command (format "git grep -F -h %s %s %s -- %s"
-                            (if nextline-p "-A1" "")
-                            (if ignore-case "-i" "")
-                            (shell-quote-argument query)
-                            (if extensions
-                                (mapconcat (lambda (ext) (concat "\"*." ext "\"")) extensions " ")
-                              "*")))
-           (lines (split-string (shell-command-to-string command) "\n"))
-           lst)
-      (while (and lines (cdr lines))
-        (when nextline-p (pop lines))   ; pop the first line
-        (push (pop lines) lst)
-        (when nextline-p (pop lines)))  ; pop "--"
-      lst)))
+    (let* ((default-directory (git-complete--root-dir)))
+      (funcall git-complete-grep-function
+               (shell-quote-argument query)
+               (git-complete--extensions)
+               nextline-p
+               (if (eq git-complete-ignore-case 'dwim)
+                   (not (string-match "[A-Z]" query))
+                 git-complete-ignore-case)))))
+
+(defun git-complete-git-grep (query extensions nextline-p ignore-case-p)
+  (let* ((command (format "git grep -F -h %s %s %s -- %s"
+                          (if nextline-p "-A1" "")
+                          (if ignore-case-p "-i" "")
+                          query
+                          (if extensions
+                              (mapconcat (lambda (ext) (concat "\"*." ext "\"")) extensions " ")
+                            "*")))
+         (lines (split-string (shell-command-to-string command) "\n"))
+         lst)
+    (while (and lines (cdr lines))
+      (when nextline-p (pop lines))   ; pop the first line
+      (push (pop lines) lst)
+      (when nextline-p (pop lines)))  ; pop "--"
+    lst))
+
+(defun git-complete-ripgrep (query extensions nextline-p ignore-case-p)
+  (let* ((command (format "rg --no-heading --no-filename --no-line-number -F %s %s %s -- %s"
+                          (if nextline-p "-A1" "")
+                          (if ignore-case-p "-i" "")
+                          (if extensions
+                              (mapconcat (lambda (ext) (concat "-g '*." ext "'")) extensions " ")
+                            " ")
+                          query))
+         (lines (split-string (shell-command-to-string command) "\n"))
+         lst)
+    (while (and lines (cdr lines))
+      (when nextline-p (pop lines))   ; pop the first line
+      (push (pop lines) lst)
+      (when nextline-p (pop lines)))  ; pop "--"
+    lst))
 
 ;; * interface
 
