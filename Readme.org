@@ -30,9 +30,8 @@ may want to insert.
 
 - complete expressions which has not been used in the git project yet
 
-- start completion automatically, since it's a bit laggy to git grep
-  over the git repo (especially for the first invokation in the
-  project)
+- start completion automatically, since it's a bit time-consuming to
+  grep over the project (especially for the first invokation)
 
 - be 100% accurate, since =git-complete= has no knowledge about the
   language you are coding in
@@ -40,8 +39,8 @@ may want to insert.
 EXTRA FEATURES:
 
 - "autopair"
-  - =git-complete= (optionally) tries to keep the parenthesis balance
-    by inserting or deleting some parens if appropreate
+  - =git-complete= (optionally) tries to keep the parentheses balanced
+    by inserting or merging some parens if appropreate
 
 - DWIM newline insertion
   - =git-complete= tries to insert newline after completion if you may
@@ -73,11 +72,13 @@ and (optionally) bind some keys.
   (global-set-key (kbd "C-c C-c") 'git-complete)
 #+end_src
 
+You may also invoke git-complete with =M-x git-complete=.
+
+Note that you also need to install =git= if it's not installed yet.
+
 *** Examples
 
 (Consider "|" as the cursor in following examples)
-
-Open a file under a git repo, and =M-x git-complete=,
 
 - after a part of a package name:
 
@@ -85,7 +86,7 @@ Open a file under a git repo, and =M-x git-complete=,
     SHA|
   #+end_src
 
-  completes the import statement.
+  git-complete completes the import statement.
 
   #+begin_src perl
     use Digest::SHA;
@@ -98,7 +99,7 @@ Open a file under a git repo, and =M-x git-complete=,
     var foo = moment().|
   #+end_src
 
-  suggests method names frequently used in your project.
+  git-complete suggests method names frequently used in your project.
 
   #+begin_src javascript
     var foo = moment().format(|
@@ -118,8 +119,8 @@ Open a file under a git repo, and =M-x git-complete=,
     |
   #+end_src
 
-  suggests the next line which usually follows "use strict;" in your
-  project.
+  suggests next line which usually follows the line =use strict;= in
+  your project.
 
   #+begin_src perl
     use strict;
@@ -166,12 +167,12 @@ its type.
 *** Completion collection
 **** Current-line completion
 
-example condition:
+example:
 
 : React|            * consider | as the cursor
 
-1. Collect lines containing "React" in your git repo, by =git grep=
-   -ing with "React"
+1. Collect lines with "React" in your git repo, by =git grep=-ing with
+   "React"
 
    : $ git grep -F -h "React"
    : import React from 'react';
@@ -189,7 +190,7 @@ example condition:
    :     ReactDOM.render(<AnotherComponent />);
    : ...
 
-2. If some lines found in 1. appear "commonly" (as defined by
+2. If some identical lines appear "frequently" (as defined by
    =git-complete-whole-line-completion-threshold=), they are added to
    the completions list, as "whole-line" completions.
 
@@ -222,9 +223,9 @@ example condition:
    : DOM.render(<AnotherComponent />);
    : ...
 
-4. Drop some words from the end of each lines until it gets "common"
-   enough (as defined in =git-complete-threshold=), and add to the
-   completions list as "omni" completions.
+4. If some identical idioms appear "frequently" (as defined in
+   =git-complete-threshold=) at the beginning of the lines, add the
+   idioms to the completions list as "omni" completions.
 
    : |                                                  | frequency | type       |
    : +--------------------------------------------------+-----------+------------|
@@ -233,40 +234,38 @@ example condition:
    : | .Component {\n                                   |       60% |       omni |
    : | from 'react';\n                                  |       30% |       omni |
    : | DOM from 'react-dom';\n                          |        5% |       omni |
-   : | DOM.render(                                      |        5% |       omni |
+   : | DOM.render(<                                     |        5% |       omni |
    : | ...                                              |       ... |        ... |
 
-   (argument to =ReactDOM.render= is dropped, since they does not
-   appear "commonly")
-
-   If some lines did not get "common" enough even if all the words are
-   dropped except for one, they are not added to the completions list.
+   Note that =DOM.render(<= is added to the list but
+   =DOM.render(<MyComponent />)= is not, since it does not appear
+   "frequently".
 
 5. If no completions are found, shorten the query by one subword
-   (configurable via =git-cmopletion-omni-completion-type=) and =git
-   grep= again, then back to the step 3. .
+   (configurable via =git-cmopletion-omni-completion-type=) from the
+   beginning and =git grep= again, then back to the step 3. .
 
-   example condition:
+   example:
 
    : var foo = bar(MyClass.|
 
-   The query "var foo = bar(MyClass." is too specific to find some
-   "common" lines, thus shortened to "foo = bar(MyClass.",
-   "bar(MyClass." then "MyClass." which may give some "common" method
-   names of the class "MyClass".
+   The query =var foo = bar(MyClass.= is too specific to find some
+   "frequent" idioms, thus shortened to =foo = bar(MyClass.=,
+   =bar(MyClass.= then =MyClass.= which may give some "frequent"
+   idioms: method names of the class =MyClass=.
 
-   Note that this case does not give any "whole-line" completions,
-   since the step 2. is skipped.
+   When the query is shortened, all completions will be type of
+   "omni", since the step 2. is skipped.
 
 **** Next-line completion
 
-example condition:
+example:
 
 : use strict;
 : |
 
-1. Collect lines next to "use strict;" in your git repo, by git
-   grepping with "use strict;"
+1. Collect lines next to =use strict;= in your git repo, by grepping
+   with =use strict;=
 
    : > git grep -F -h -A1 "use strict;"
    : use strict;
@@ -296,30 +295,31 @@ example condition:
    : | use utf8;\n             |       20% | whole-line |
    : | ...                     |       ... |        ... |
 
-   Note that next-line completion does not give any "omni"
-   completions.
+Next-line completion does not give any "omni" completions.
 
 *** Completion insertion
 **** Whole-line completion
 
-example condition:
+example:
 
 : React|
 
-and the selected completion is:
+when you select a "whole-line" completion like below:
 
 : export default class extends React.Component {
 
-1. Delete all characters in the line
+then
+
+1. Delete all characters in the current line
 
    : |
 
-2. Insert the completion with a newline and indentation
+2. Insert the completion followed by newline and indentation
 
    : export default class extends React.Component {
    :     |
 
-3. Add some close parens as needed (See "autopair" section for details)
+3. Add some close parens as needed (if "autopair" feature is not disabled)
 
    : export default class extends React.Component {
    :     |
@@ -327,27 +327,29 @@ and the selected completion is:
 
 **** Omni completion
 
-example condition:
+example:
 
 : var foo = moment().format|
 
-and the selected completion is:
+when you select a "omni" completion like below:
 
 : ("YYYY-MM-DD HH:mm:ss",
+
+then
 
 1. Just insert the completion
 
    : var foo = moment().format("YYYY-MM-DD HH:mm:ss",|
 
-2. Add some close parens as needed (See "autopair" section for
-   details) after the cursor
+2. Add some close parens as needed (if "autopair" feature is not
+   disabled) after the cursor
 
    : var foo = moment().format("YYYY-MM-DD HH:mm:ss",|)
 
 ** "autopair" feature
 
-When =git-grep-enable-autopair= is non-nil, the parenthesis balance is
-always kept during completion.
+When =git-grep-enable-autopair= is non-nil, git-complete always try to
+keep the parentheses balanced during completion.
 
 *** Whole-line (Next-line) completion
 
@@ -406,10 +408,10 @@ always kept during completion.
   :   foo
   : );
 
-  (I'm not sure this behavior is very useful ... but just to keep the
-  balance. maybe improved in the future versions ... ?)
+  (I'm not sure this behavior is very useful ... but this actually
+  keeps the balance. maybe improved in the future versions ... ?)
 
-*** Otherwise
+*** "omni" completion
 
 - Open paren
 
@@ -440,7 +442,7 @@ always kept during completion.
   : an_awesome_argument), bra, bra, bra
 
   then the close paren and characters outside the paren (=bra, bra,
-  bra=) are dropped from the completion:
+  bra=) are simply dropped from the completion:
 
   : result:
   : var foo = my_awesome_function(an_awesome_argument|)
