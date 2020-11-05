@@ -46,7 +46,7 @@
 ;; 0.0.2 add option `git-complete-threshold'
 ;; 0.0.3 add option `git-complete-omni-completion-type'
 ;; 0.0.4 remove obsolete variables
-;; 0.0.5 add option `git-complete-grep-function' and support the silver searcher
+;; 0.0.5 add option `git-complete-grep-function' and support ripgrep
 
 ;;; Code:
 
