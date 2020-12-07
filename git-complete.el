@@ -338,7 +338,7 @@ inserted."
       (funcall indent-line-function)
       (back-to-indentation))))
 
-;; * get candidates via git grep
+;; * trim and filter candidates
 
 (defun git-complete--make-hist-trie (lst-of-lst)
   "Internal function for `git-complete--filter-candidates'. Takes
@@ -366,8 +366,6 @@ empty string."
   (let ((res nil))
     (maphash (lambda (k v) (push (cons k (git-complete--dump-trie v)) res)) (car trie))
     (cons (cdr trie) res)))
-
-;; * trim and filter candidates
 
 (defun git-complete--filter-candidates-internal (trie threshold exact-p &optional node-key)
   "Internal recursive function for
@@ -413,7 +411,9 @@ trimmed and result is limited to exact matches."
     (mapcar (lambda (e) `(,(car e) ,(null query) . ,(cdr e)))
             (sort filtered (lambda (a b) (> (cddr a) (cddr b)))))))
 
-(defun git-complete--get-query-candidates (query nextline-p)
+;; * grep
+
+(defun git-complete--get-grep-result (query nextline-p)
   "Get completion candidates. This function calls `git grep'
 command to get lines matching QUERY and returns as a list of
 string."
@@ -476,8 +476,8 @@ string."
                   (when next-line-p (forward-line -1) (end-of-line))
                   (git-complete--trim-spaces
                    (buffer-substring (or omni-from (point-at-bol)) (point)) nil)))
-         (candidates (when (string-match "\\_>" query)
-                       (git-complete--get-query-candidates query next-line-p)))
+         (candidates (when (string-match "\\_>" query) ; at least one symbol required
+                       (git-complete--get-grep-result query next-line-p)))
          (filtered (nconc (when (or next-line-p (null omni-from))
                             (git-complete--filter-candidates
                              candidates nil
