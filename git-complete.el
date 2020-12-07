@@ -400,7 +400,7 @@ NODE-KEY is used internally."
             ((not exact-p)
              (list (cons node-key (cons nil (cdr trie)))))))))
 
-(defun git-complete--filter-candidates (lst &optional omni-query threshold no-leading-ws)
+(defun git-complete--filter-candidates (lst &optional query threshold no-leading-ws)
   "Extract a sorted list of \"suitable\" completion candidates of
 the form (STRING WHOLE-LINE-P EXACT-P . COUNT) from a string list
 LST. If OMNI-QUERY is specified, candidates are trimmed by
@@ -409,11 +409,11 @@ trimmed and result is limited to exact matches."
   (setq lst
         (cl-remove-if
          (lambda (s) (string= s ""))
-         (mapcar (lambda (s) (git-complete--trim-candidate s omni-query no-leading-ws)) lst)))
+         (mapcar (lambda (s) (git-complete--trim-candidate s query no-leading-ws)) lst)))
   (let* ((trie (git-complete--make-hist-trie (mapcar (lambda (s) (split-string s "$\\|\\_>")) lst)))
          (threshold (* threshold (cdr trie)))
-         (filtered (git-complete--filter-candidates-internal trie threshold (null omni-query))))
-    (mapcar (lambda (e) `(,(car e) ,(null omni-query) . ,(cdr e)))
+         (filtered (git-complete--filter-candidates-internal trie threshold (null query))))
+    (mapcar (lambda (e) `(,(car e) ,(null query) . ,(cdr e)))
             (sort filtered (lambda (a b) (> (cddr a) (cddr b)))))))
 
 (defun git-complete--get-query-candidates (query nextline-p)
@@ -470,7 +470,7 @@ string."
     kmap)
   "Keymap for git-complete popup menu.")
 
-(defun git-complete--internal (&optional omni-from)
+(defun git-complete--collect-candidates (&optional omni-from)
   "Internal recursive function for git-complete."
   (let* ((bol (point-at-bol))
          (next-line-p (looking-back "^[\s\t]*" bol))
@@ -493,10 +493,24 @@ string."
                              candidates query
                              git-complete-threshold
                              no-leading-whitespaces)))))
-    (cond (filtered
+    (or filtered
+        (and git-complete-omni-completion-type
+             (let ((next-from
+                    (save-excursion
+                      (cond (omni-from (git-complete--beginning-of-next-word omni-from))
+                            (next-line-p (forward-line -1) (back-to-indentation) (point))
+                            (t (back-to-indentation) (point))))))
+               (when next-from
+                 (git-complete--collect-candidates next-from)))))))
+
+(defun git-complete ()
+  "Complete the line at point with `git grep'."
+  (interactive)
+  (let ((candidates (git-complete--collect-candidates)))
+    (cond (candidates
            (cl-destructuring-bind (str whole-line-p exact-p . count)
                (popup-menu*
-                (mapcar (lambda (e) (popup-make-item (car e) :value e)) filtered)
+                (mapcar (lambda (e) (popup-make-item (car e) :value e)) candidates)
                 :scroll-bar t
                 :isearch git-complete-enable-isearch
                 :keymap git-complete--popup-menu-keymap)
@@ -506,27 +520,11 @@ string."
                        (looking-back "^[\s\t]*" (point-at-bol))
                      git-complete-repeat-completion)
                (let ((git-complete-fallback-function nil))
-                 (git-complete--internal)))))
-          ((and (not next-line-p) git-complete-omni-completion-type)
-           (let ((next-from
-                  (save-excursion
-                    (cond (omni-from (git-complete--beginning-of-next-word omni-from))
-                          (t (back-to-indentation) (point))))))
-             (cond (next-from
-                    (git-complete--internal next-from))
-                   (git-complete-fallback-function
-                    (funcall git-complete-fallback-function))
-                   (t
-                    (message "No completions found.")))))
+                 (git-complete)))))
           (git-complete-fallback-function
            (funcall git-complete-fallback-function))
           (t
            (message "No completions found.")))))
-
-(defun git-complete ()
-  "Complete the line at point with `git grep'."
-  (interactive)
-  (git-complete--internal))
 
 ;; * provide
 
