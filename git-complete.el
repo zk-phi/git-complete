@@ -386,10 +386,8 @@ NODE-KEY is used internally."
                      children))
             ((null node-key)
              nil)
-            ((string= node-key "")
-             (list (cons node-key (cons t (cdr trie)))))
-            ((not exact-p)
-             (list (cons node-key (cons nil (cdr trie)))))))))
+            ((or (string= node-key "") (not exact-p))
+             (list (cons node-key (cons exact-p (cdr trie)))))))))
 
 (defun git-complete--filter-candidates (lst &optional query threshold no-leading-ws)
   "Extract a sorted list of \"suitable\" completion candidates of
