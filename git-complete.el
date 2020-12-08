@@ -169,10 +169,11 @@ result."
   "Like `up-list' but regardless of `forward-sexp-function'."
   (goto-char (or (scan-lists (point) 1 1) (buffer-end 1))))
 
-(defun git-complete--trim-spaces (str left right)
-  "Remove leading/trailing whitespaces from STR."
+(defun git-complete--trim-spaces (str trailing)
+  "Remove leading whitespaces from STR. If TRAILING is non-nil,
+remove trailing whitespaces too."
   (replace-regexp-in-string
-   (concat "^" (if left "[\s\t]*" "") "\\|" (if right "[\s\t]*" "") "$") "" str))
+   (concat "^[\s\t\n]*\\|" (if trailing "[\s\t\n]*" "") "$") "" str))
 
 (defun git-complete--trim-candidate (str omni-query &optional no-leading-whitespaces)
   "Format candidate (= result from git-complete) by removing some
@@ -478,7 +479,7 @@ string."
          (query (save-excursion
                   (when next-line-p (forward-line -1) (end-of-line))
                   (git-complete--trim-spaces
-                   (buffer-substring (or omni-from (point-at-bol)) (point)) t nil)))
+                   (buffer-substring (or omni-from (point-at-bol)) (point)) nil)))
          (candidates (when (string-match "\\_>" query)
                        (git-complete--get-query-candidates query next-line-p)))
          (filtered (nconc (when (or next-line-p (null omni-from))
