@@ -179,33 +179,25 @@ remove trailing whitespaces too."
   "Format candidate (= result from git-complete) by removing some
 leading/trailing characters.
 
-1. If OMNI-QUERY is nil, just remove leading and trailing
-whitespaces.
+i. Search OMNI-QUERY inside STR, and remove characters before
+   the query and the query itself (if no matches are found,
+   return an empty string) and delete all leading whitespaces
+   except for one (zero if NO-LEADING-WHITESPACES is non-nil).
 
-2. If OMNI-QUERY is non-nil:
-
-   i. Search OMNI-QUERY inside STR, and remove characters before
-      the query and the query itself (if no matches are found,
-      return an empty string) and delete all leading whitespaces
-      except for one (zero if NO-LEADING-WHITESPACES is non-nil).
-
-   ii. When STR has more close parens than open parens, remove
-       all characters outside the unbalanced close parens (close
-       parens which do not have matching open parens). Then
-       delete all trailing whitespaces."
+ii. When STR has more close parens than open parens, remove
+    all characters outside the unbalanced close parens (close
+    parens which do not have matching open parens). Then
+    delete all trailing whitespaces."
   (with-temp-buffer
     (save-excursion (insert str))
-    (if omni-query
-        (if (search-forward omni-query nil t)
-            (and (looking-at "\\([\s\t]\\)+[\s\t]")
-                 (goto-char (match-end (if no-leading-whitespaces 0 1))))
-          (goto-char (point-max)))
-      (skip-chars-forward "\s\t"))
+    (if (search-forward omni-query nil t)
+        (and (looking-at "\\([\s\t]\\)+[\s\t]")
+             (goto-char (match-end (if no-leading-whitespaces 0 1))))
+      (goto-char (point-max)))
     (delete-region (point-min) (point))
-    (when omni-query
-      (ignore-errors
-        (git-complete--up-list-unsafe)
-        (delete-region (1- (point)) (point-max))))
+    (ignore-errors
+      (git-complete--up-list-unsafe)
+      (delete-region (1- (point)) (point-max)))
     (goto-char (point-max))
     (skip-chars-backward "\s\t")
     (delete-region (point) (point-max))
@@ -410,7 +402,11 @@ trimmed and result is limited to exact matches."
   (setq lst
         (cl-remove-if
          (lambda (s) (string= s ""))
-         (mapcar (lambda (s) (git-complete--trim-candidate s query no-leading-ws)) lst)))
+         (mapcar (lambda (s)
+                   (if query
+                       (git-complete--trim-candidate s query no-leading-ws)
+                     (git-complete--trim-spaces s t)))
+                 lst)))
   (let* ((trie (git-complete--make-hist-trie (mapcar (lambda (s) (split-string s "$\\|\\_>")) lst)))
          (threshold (* threshold (cdr trie)))
          (filtered (git-complete--filter-candidates-internal trie threshold (null query))))
