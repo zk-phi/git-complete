@@ -465,12 +465,9 @@ string."
     kmap)
   "Keymap for git-complete popup menu.")
 
-(defun git-complete--collect-candidates (&optional omni-from)
+(defun git-complete--collect-candidates (next-line-p no-leading-whitespaces &optional omni-from)
   "Internal recursive function for git-complete."
-  (let* ((bol (point-at-bol))
-         (next-line-p (looking-back "^[\s\t]*" bol))
-         (no-leading-whitespaces (looking-back "[\s\t]" bol))
-         (query (save-excursion
+  (let* ((query (save-excursion
                   (when next-line-p (forward-line -1) (end-of-line))
                   (git-complete--trim-spaces
                    (buffer-substring (or omni-from (point-at-bol)) (point)) nil)))
@@ -496,12 +493,16 @@ string."
                             (next-line-p (forward-line -1) (back-to-indentation) (point))
                             (t (back-to-indentation) (point))))))
                (when next-from
-                 (git-complete--collect-candidates next-from)))))))
+                 (git-complete--collect-candidates
+                  next-line-p no-leading-whitespaces next-from)))))))
 
 (defun git-complete ()
   "Complete the line at point with `git grep'."
   (interactive)
-  (let ((candidates (git-complete--collect-candidates)))
+  (let* ((bol (point-at-bol))
+         (next-line-p (looking-back "^[\s\t]*" bol))
+         (no-leading-whitespaces (looking-back "[\s\t]" bol))
+         (candidates (git-complete--collect-candidates next-line-p no-leading-whitespaces)))
     (cond (candidates
            (cl-destructuring-bind (str whole-line-p exact-p . count)
                (popup-menu*
