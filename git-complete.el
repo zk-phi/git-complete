@@ -18,7 +18,7 @@
 ;; Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 ;; Author: zk_phi
-;; URL: http://hins11.yu-yake.com/
+;; URL: http://zk-phi.github.com/
 ;; Version: 0.0.5
 ;; Package-Requires: ((popup "0.4"))
 
