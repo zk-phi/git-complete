@@ -241,20 +241,19 @@ limited."
                  (or (assoc-default major-mode git-complete-major-mode-extensions-alist)
                      (list (file-name-extension buffer-file-name)))))))
 
-(defun git-complete--beginning-of-next-word (current-start)
-  "Returns the beginning position of next word (according to
-git-complete-omni-completion-type) in the line, or nil if not
-found."
-  (save-excursion
-    (let ((lim (point))
-          (case-fold-search nil))
-      (goto-char (or current-start (point-at-bol)))
-      (cl-case git-complete-omni-completion-type
-        ((symbol)  (and (search-forward-regexp ".\\_<" lim t) (point)))
-        ((word)    (and (search-forward-regexp ".\\<" lim t) (point)))
-        ((subword) (and (search-forward-regexp ".\\<\\|[a-zA-Z]\\([A-Z]\\)[a-z]" lim t)
-                        (or (match-beginning 1) (point))))
-        (t nil)))))
+(defun git-complete--shorten-query (query)
+  "Shorten QUERY by one word (according to
+git-complete-omni-completion-type). If it cannot be shorter,
+return an empty string."
+  (let* ((case-fold-search nil)
+         (shortened (replace-regexp-in-string
+                     (cl-case git-complete-omni-completion-type
+                       ((symbol)  "^\\(.+?\\)\\_<.")
+                       ((word)    "^\\(.+?\\)\\<.")
+                       ((subword) "^\\(.+?\\)\\(\\<.\\|[A-Z][a-z]\\)")
+                       (t "^$"))
+                     "" query nil nil 1)))
+    (if (string= query shortened) "" shortened)))
 
 ;; * smart string substitution
 
@@ -441,7 +440,7 @@ string."
                           (if extensions
                               (mapconcat (lambda (ext) (concat "\"*." ext "\"")) extensions " ")
                             "*")))
-         (lines (split-string (shell-command-to-string command) "\n"))
+         (lines (split-string (shell-command-to-string command) "^" t))
          (count 0)
          lst)
     (while (and lines (cdr lines))
@@ -460,7 +459,7 @@ string."
                               (mapconcat (lambda (ext) (concat "-g '*." ext "'")) extensions " ")
                             " ")
                           query))
-         (lines (split-string (shell-command-to-string command) "\n"))
+         (lines (split-string (shell-command-to-string command) "^" t))
          (count 0)
          lst)
     (while (and lines (cdr lines))
@@ -479,52 +478,47 @@ string."
     kmap)
   "Keymap for git-complete popup menu.")
 
-(defun git-complete--collect-candidates (next-line-p no-leading-whitespaces &optional omni-from)
-  "Collect candidates and returns as a pair of 1. a list of
-whole-line candidates and 2. a list of omni candidates."
-  (let* ((query (save-excursion
-                  (when next-line-p (forward-line -1) (end-of-line))
-                  (git-complete--normalize-query
-                   (buffer-substring (or omni-from (point-at-bol)) (point)))))
-         (candidates (when (string-match "\\_>" query) ; at least one symbol required
-                       (git-complete--get-grep-result query next-line-p)))
-         (whole-line (when (or next-line-p (null omni-from))
-                       (git-complete--filter-candidates
-                        (cl-remove-if
-                         (lambda (s) (string= s ""))
-                         (mapcar (lambda (s) (git-complete--normalize-candidate s t)) candidates))
-                        t
-                        (if next-line-p
-                            git-complete-next-line-completion-threshold
-                          git-complete-whole-line-completion-threshold))))
-         (omni (unless next-line-p
-                 (git-complete--filter-candidates
-                  (cl-remove-if
-                   (lambda (s) (string= s ""))
-                   (mapcar (lambda (s)
-                             (git-complete--normalize-candidate
-                              (git-complete--trim-candidate s query) no-leading-whitespaces))
-                           candidates))
-                  nil
-                  git-complete-threshold))))
-    (or (and (or whole-line omni)
-             (cons whole-line omni))
-        (and git-complete-omni-completion-type
-             (let ((next-from
-                    (save-excursion
-                      (cond (omni-from (git-complete--beginning-of-next-word omni-from))
-                            (next-line-p (forward-line -1) (back-to-indentation) (point))
-                            (t (back-to-indentation) (point))))))
-               (when next-from
-                 (git-complete--collect-candidates
-                  next-line-p no-leading-whitespaces next-from)))))))
+(defun git-complete--collect-whole-line-candidates (query)
+  "Collect whole-line completion candidates and return as a list of string."
+  (when (string-match "\\_>" query)     ; at least one symbol required
+    (let* ((candidates (git-complete--get-grep-result query nil))
+           (normalized (cl-remove-if
+                        (lambda (s) (or (string= s "") (string= s query)))
+                        (mapcar (lambda (s) (git-complete--normalize-candidate s t)) candidates))))
+      (git-complete--filter-candidates
+       normalized t git-complete-whole-line-completion-threshold))))
+
+(defun git-complete--collect-omni-candidates (query next-line-p no-leading-whitespaces)
+  "Collect omni completion candidates and return as a list of string."
+  (when (string-match "\\_>" query)     ; at least one symbol required
+    (let* ((candidates (git-complete--get-grep-result query next-line-p))
+           (trimmed (if next-line-p candidates
+                      (mapcar (lambda (s) (git-complete--trim-candidate s query)) candidates)))
+           (normalized (cl-remove-if
+                        (lambda (s) (or (string= s "") (string= s "\n")))
+                        (mapcar (lambda (s)
+                                  (git-complete--normalize-candidate s no-leading-whitespaces))
+                                trimmed)))
+           (filtered (git-complete--filter-candidates
+                      normalized
+                      next-line-p
+                      (if next-line-p
+                          git-complete-next-line-completion-threshold
+                        git-complete-threshold))))
+      (or filtered
+          (git-complete--collect-omni-candidates
+           (git-complete--shorten-query query) next-line-p no-leading-whitespaces)))))
 
 ;; newline を入れるべきかどうかは、 whole-line かどうかの問題ではない
 ;; よなあ
 
-;; git-complete--filter-candidates あたりのおしゃれ挙動 (クエリの有無
-;; によって…とか) を git-complete 側に寄せていけば、 company-backend
-;; 化できる気がする
+(defun git-complete--drop-newline (str)
+  "If STR ends with a newline character, then drop the newline
+  character and return (STR . t). Otherwise just return (STR
+  . nil)."
+  (if (string-match "\n" str)
+      (cons (substring str 0 (match-beginning 0)) t)
+    (cons str nil)))
 
 (defun git-complete ()
   "Complete the line at point with `git grep'."
@@ -532,19 +526,28 @@ whole-line candidates and 2. a list of omni candidates."
   (let* ((bol (point-at-bol))
          (next-line-p (looking-back "^[\s\t]*" bol))
          (no-leading-whitespaces (looking-back "[\s\t]" bol))
-         (candidates (git-complete--collect-candidates next-line-p no-leading-whitespaces))
+         (query (save-excursion
+                  (when next-line-p (forward-line -1) (end-of-line))
+                  (git-complete--normalize-query (buffer-substring (point-at-bol) (point)))))
+         (whole-line (and (not next-line-p)
+                          (mapcar
+                           'git-complete--drop-newline
+                           (git-complete--collect-whole-line-candidates query))))
+         (omni (mapcar
+                'git-complete--drop-newline
+                (git-complete--collect-omni-candidates query next-line-p no-leading-whitespaces)))
          (items (nconc
-                 (mapcar (lambda (e) (popup-make-item e :value (cons t e))) (car candidates))
-                 (mapcar (lambda (e) (popup-make-item e :value (cons nil e))) (cdr candidates)))))
+                 (mapcar (lambda (e) (popup-make-item (car e) :value (cons t e))) whole-line)
+                 (mapcar (lambda (e) (popup-make-item (car e) :value (cons nil e))) omni))))
     (cond (items
-           (cl-destructuring-bind (whole-line-p . str)
+           (cl-destructuring-bind (whole-line-p str . newline)
                (popup-menu*
                 items
                 :scroll-bar t
                 :isearch git-complete-enable-isearch
                 :keymap git-complete--popup-menu-keymap)
              (git-complete--replace-substring
-              (if whole-line-p (point-at-bol) (point)) (point) str (not whole-line-p))
+              (if whole-line-p (point-at-bol) (point)) (point) str (not newline))
              (when (if (eq git-complete-repeat-completion 'newline)
                        (looking-back "^[\s\t]*" (point-at-bol))
                      git-complete-repeat-completion)
