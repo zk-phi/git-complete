@@ -169,12 +169,6 @@ result."
   "Like `up-list' but regardless of `forward-sexp-function'."
   (goto-char (or (scan-lists (point) 1 1) (buffer-end 1))))
 
-(defun git-complete--trim-spaces (str trailing)
-  "Remove leading whitespaces from STR. If TRAILING is non-nil,
-remove trailing whitespaces too."
-  (replace-regexp-in-string
-   (concat "^[\s\t\n]*\\|" (if trailing "[\s\t\n]*" "") "$") "" str))
-
 (defun git-complete--normalize-query (str)
   "Remove all leading spaces (indentation) from STR. If STR has
   more than two trailing spaces, then delete them except for
@@ -188,32 +182,39 @@ remove trailing whitespaces too."
       (delete-region (1+ (point)) (point-max)))
     (buffer-string)))
 
-(defun git-complete--trim-candidate (str omni-query &optional no-leading-whitespaces)
-  "Format candidate (= result from git-complete) by removing some
-leading/trailing characters.
-
-i. Search OMNI-QUERY inside STR, and remove characters before
-   the query and the query itself (if no matches are found,
-   return an empty string) and delete all leading whitespaces
-   except for one (zero if NO-LEADING-WHITESPACES is non-nil).
-
-ii. When STR has more close parens than open parens, remove
-    all characters outside the unbalanced close parens (close
-    parens which do not have matching open parens). Then
-    delete all trailing whitespaces."
+(defun git-complete--trim-candidate (str query)
+  "Search OMNI-QUERY inside STR, and remove characters before the
+   query and the query itself (if no matches are found, return an
+   empty string). If STR has more close parens than open parens,
+   then remove all characters after the last matching close
+   paren."
   (with-temp-buffer
     (save-excursion (insert str))
-    (if (search-forward omni-query nil t)
-        (and (looking-at "\\([\s\t]\\)+[\s\t]")
-             (goto-char (match-end (if no-leading-whitespaces 0 1))))
-      (goto-char (point-max)))
+    (or (search-forward query nil t)
+        (goto-char (point-max)))
     (delete-region (point-min) (point))
     (ignore-errors
       (git-complete--up-list-unsafe)
-      (delete-region (1- (point)) (point-max)))
-    (goto-char (point-max))
+      (forward-char -1)
+      (skip-chars-backward "\s\t")
+      (delete-region (point) (point-max)))
+    (buffer-string)))
+
+(defun git-complete--normalize-candidate (str &optional no-leading-whitespaces)
+  "Remove all trailing spaces from STR. If STR ends with a
+  newline character, then delete all spaces at the eol. If STR
+  has more than one leading whitespaces, remove them except for
+  one. If NO-LEADING-WHITESPACES, all leading spaces are deleted
+  instead."
+  (with-temp-buffer
+    (save-excursion (insert str))
+    (when (and (> (skip-chars-forward "\s\t") 0)
+               (not no-leading-whitespaces))
+      (forward-char -1))
+    (delete-region (point-min) (point))
+    (end-of-line)
     (skip-chars-backward "\s\t")
-    (delete-region (point) (point-max))
+    (delete-region (point) (point-at-eol))
     (buffer-string)))
 
 (defvar-local git-complete--root-dir nil) ; cache
@@ -480,7 +481,7 @@ whole-line candidates and 2. a list of omni candidates."
                        (git-complete--filter-candidates
                         (cl-remove-if
                          (lambda (s) (string= s ""))
-                         (mapcar (lambda (s) (git-complete--trim-spaces s t)) candidates))
+                         (mapcar (lambda (s) (git-complete--normalize-candidate s t)) candidates))
                         t
                         (if next-line-p
                             git-complete-next-line-completion-threshold
@@ -489,7 +490,9 @@ whole-line candidates and 2. a list of omni candidates."
                  (git-complete--filter-candidates
                   (cl-remove-if
                    (lambda (s) (string= s ""))
-                   (mapcar (lambda (s) (git-complete--trim-candidate s query no-leading-whitespaces))
+                   (mapcar (lambda (s)
+                             (git-complete--normalize-candidate
+                              (git-complete--trim-candidate s query) no-leading-whitespaces))
                            candidates))
                   nil
                   git-complete-threshold))))
