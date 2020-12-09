@@ -19,7 +19,7 @@
 
 ;; Author: zk_phi
 ;; URL: http://zk-phi.github.com/
-;; Version: 0.0.5
+;; Version: 0.0.6
 ;; Package-Requires: ((popup "0.4"))
 
 ;; Load this script
@@ -47,6 +47,7 @@
 ;; 0.0.3 add option `git-complete-omni-completion-type'
 ;; 0.0.4 remove obsolete variables
 ;; 0.0.5 add option `git-complete-grep-function' and support ripgrep
+;; 0.0.6 add option `git-complete-candidate-limit'
 
 ;;; Code:
 
