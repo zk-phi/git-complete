@@ -367,35 +367,35 @@ empty string."
     (maphash (lambda (k v) (push (cons k (git-complete--dump-trie v)) res)) (car trie))
     (cons (cdr trie) res)))
 
-(defun git-complete--filter-candidates-internal (trie threshold exact-p &optional node-key)
+(defun git-complete--filter-candidates-internal (trie threshold exact-only &optional node-key)
   "Internal recursive function for
 `git-complete--filter-candidates'. Traverse a trie returned by
 `git-complete--make-hist-trie' and finds list of \"suitable\"
-completion candidates due to THRESHOLD and EXACT-P, returned as a
-list of the form ((STRING . COUNT) ...). Optional arg NODE-KEY is
-used internally."
+completion candidates according to THRESHOLD and EXACT-ONLY,
+returned as a list of the form ((STRING . COUNT) ...). Optional
+arg NODE-KEY is used internally."
   (when (and trie (>= (cdr trie) threshold))
     (let ((children
            (apply 'nconc
                   (git-complete--maphash
                    (lambda (k v)
-                     (funcall 'git-complete--filter-candidates-internal v threshold exact-p k))
+                     (funcall 'git-complete--filter-candidates-internal v threshold exact-only k))
                    (car trie)))))
       (cond (children
              (mapcar (lambda (x) (cons (if node-key (concat node-key (car x)) (car x)) (cdr x)))
                      children))
             ((null node-key)
              nil)
-            ((or (string= node-key "") (not exact-p))
+            ((or (string= node-key "") (not exact-only))
              (list (cons node-key (cdr trie))))))))
 
-(defun git-complete--filter-candidates (lst &optional exact-p threshold)
+(defun git-complete--filter-candidates (lst &optional exact-only threshold)
   "Extract a sorted (by occurrences) list of \"suitable\"
-completion candidates from a string list LST. If EXACT-P is
-specified, candidates are limited to exact matches."
+completion candidates from a string list LST. Unlessj EXACT-ONLY
+is non-nil, strings can be shortened to meet THRESHOLD."
   (let* ((trie (git-complete--make-hist-trie (mapcar (lambda (s) (split-string s "$\\|\\_>")) lst)))
          (threshold (* threshold (cdr trie)))
-         (filtered (git-complete--filter-candidates-internal trie threshold exact-p)))
+         (filtered (git-complete--filter-candidates-internal trie threshold exact-only)))
     (mapcar 'car (sort filtered (lambda (a b) (> (cdr a) (cdr b)))))))
 
 ;; * grep
