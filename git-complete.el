@@ -96,6 +96,12 @@ next-line completion"
   :type 'number
   :group 'git-complete)
 
+(defcustom git-complete-candidate-limit 1000
+  "Maximum number of grep result. If more lines are found by
+  grep, stop completion."
+  :type 'number
+  :group 'git-complete)
+
 (defcustom git-complete-omni-completion-type 'subword
   "Specifies how to shorten query to perform omni-completion. Can
 be either 'symbol, 'word, 'subword, or nil to disable
@@ -435,11 +441,14 @@ string."
                               (mapconcat (lambda (ext) (concat "\"*." ext "\"")) extensions " ")
                             "*")))
          (lines (split-string (shell-command-to-string command) "\n"))
+         (count 0)
          lst)
     (while (and lines (cdr lines))
-      (when nextline-p (pop lines))   ; pop the first line
+      (when nextline-p (pop lines))     ; pop the first line
       (push (pop lines) lst)
-      (when nextline-p (pop lines)))  ; pop "--"
+      (when nextline-p (pop lines))     ; pop "--"
+      (when (> (setq count (1+ count)) git-complete-candidate-limit)
+        (setq lines nil lst nil)))
     lst))
 
 (defun git-complete-ripgrep (query extensions nextline-p ignore-case-p)
@@ -451,11 +460,14 @@ string."
                             " ")
                           query))
          (lines (split-string (shell-command-to-string command) "\n"))
+         (count 0)
          lst)
     (while (and lines (cdr lines))
-      (when nextline-p (pop lines))   ; pop the first line
+      (when nextline-p (pop lines))     ; pop the first line
       (push (pop lines) lst)
-      (when nextline-p (pop lines)))  ; pop "--"
+      (when nextline-p (pop lines))     ; pop "--"
+      (when (> (setq count (1+ count)) git-complete-candidate-limit)
+        (setq lines nil lst nil)))
     lst))
 
 ;; * interface
