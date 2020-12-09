@@ -372,8 +372,8 @@ empty string."
 `git-complete--filter-candidates'. Traverse a trie returned by
 `git-complete--make-hist-trie' and finds list of \"suitable\"
 completion candidates due to THRESHOLD and EXACT-P, returned as a
-list of the form ((STRING EXACT-P . COUNT) ...). Optional arg
-NODE-KEY is used internally."
+list of the form ((STRING . COUNT) ...). Optional arg NODE-KEY is
+used internally."
   (when (and trie (>= (cdr trie) threshold))
     (let ((children
            (apply 'nconc
@@ -387,19 +387,16 @@ NODE-KEY is used internally."
             ((null node-key)
              nil)
             ((or (string= node-key "") (not exact-p))
-             (list (cons node-key (cons exact-p (cdr trie)))))))))
+             (list (cons node-key (cdr trie))))))))
 
 (defun git-complete--filter-candidates (lst &optional exact-p threshold)
-  "Extract a sorted list of \"suitable\" completion candidates of
-the form (STRING WHOLE-LINE-P EXACT-P . COUNT) from a string list
-LST. If OMNI-QUERY is specified, candidates are trimmed by
-`git-complete--trim-candidate'. Otherwise candidates are not
-trimmed and result is limited to exact matches."
+  "Extract a sorted (by occurrences) list of \"suitable\"
+completion candidates from a string list LST. If EXACT-P is
+specified, candidates are limited to exact matches."
   (let* ((trie (git-complete--make-hist-trie (mapcar (lambda (s) (split-string s "$\\|\\_>")) lst)))
          (threshold (* threshold (cdr trie)))
          (filtered (git-complete--filter-candidates-internal trie threshold exact-p)))
-    (mapcar (lambda (e) `(,(car e) ,exact-p . ,(cdr e)))
-            (sort filtered (lambda (a b) (> (cddr a) (cddr b)))))))
+    (mapcar 'car (sort filtered (lambda (a b) (> (cdr a) (cdr b)))))))
 
 ;; * grep
 
@@ -458,7 +455,8 @@ string."
   "Keymap for git-complete popup menu.")
 
 (defun git-complete--collect-candidates (next-line-p no-leading-whitespaces &optional omni-from)
-  "Internal recursive function for git-complete."
+  "Collect candidates and returns as a pair of 1. a list of
+whole-line candidates and 2. a list of omni candidates."
   (let* ((query (save-excursion
                   (when next-line-p (forward-line -1) (end-of-line))
                   (git-complete--trim-spaces
@@ -483,7 +481,7 @@ string."
                   nil
                   git-complete-threshold))))
     (or (and (or whole-line omni)
-             (nconc whole-line omni))
+             (cons whole-line omni))
         (and git-complete-omni-completion-type
              (let ((next-from
                     (save-excursion
@@ -494,22 +492,32 @@ string."
                  (git-complete--collect-candidates
                   next-line-p no-leading-whitespaces next-from)))))))
 
+;; newline を入れるべきかどうかは、 whole-line かどうかの問題ではない
+;; よなあ
+
+;; git-complete--filter-candidates あたりのおしゃれ挙動 (クエリの有無
+;; によって…とか) を git-complete 側に寄せていけば、 company-backend
+;; 化できる気がする
+
 (defun git-complete ()
   "Complete the line at point with `git grep'."
   (interactive)
   (let* ((bol (point-at-bol))
          (next-line-p (looking-back "^[\s\t]*" bol))
          (no-leading-whitespaces (looking-back "[\s\t]" bol))
-         (candidates (git-complete--collect-candidates next-line-p no-leading-whitespaces)))
-    (cond (candidates
-           (cl-destructuring-bind (str whole-line-p exact-p . count)
+         (candidates (git-complete--collect-candidates next-line-p no-leading-whitespaces))
+         (items (nconc
+                 (mapcar (lambda (e) (popup-make-item e :value (cons t e))) (car candidates))
+                 (mapcar (lambda (e) (popup-make-item e :value (cons nil e))) (cdr candidates)))))
+    (cond (items
+           (cl-destructuring-bind (whole-line-p . str)
                (popup-menu*
-                (mapcar (lambda (e) (popup-make-item (car e) :value e)) candidates)
+                items
                 :scroll-bar t
                 :isearch git-complete-enable-isearch
                 :keymap git-complete--popup-menu-keymap)
              (git-complete--replace-substring
-              (if whole-line-p (point-at-bol) (point)) (point) str (not exact-p))
+              (if whole-line-p (point-at-bol) (point)) (point) str (not whole-line-p))
              (when (if (eq git-complete-repeat-completion 'newline)
                        (looking-back "^[\s\t]*" (point-at-bol))
                      git-complete-repeat-completion)
