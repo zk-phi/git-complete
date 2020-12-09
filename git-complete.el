@@ -175,6 +175,19 @@ remove trailing whitespaces too."
   (replace-regexp-in-string
    (concat "^[\s\t\n]*\\|" (if trailing "[\s\t\n]*" "") "$") "" str))
 
+(defun git-complete--normalize-query (str)
+  "Remove all leading spaces (indentation) from STR. If STR has
+  more than two trailing spaces, then delete them except for
+  one."
+  (with-temp-buffer
+    (save-excursion (insert str))
+    (skip-chars-forward "\s\t")
+    (delete-region (point-min) (point))
+    (goto-char (point-max))
+    (when (<= (skip-chars-backward "\s\t") -2)
+      (delete-region (1+ (point)) (point-max)))
+    (buffer-string)))
+
 (defun git-complete--trim-candidate (str omni-query &optional no-leading-whitespaces)
   "Format candidate (= result from git-complete) by removing some
 leading/trailing characters.
@@ -459,8 +472,8 @@ string."
 whole-line candidates and 2. a list of omni candidates."
   (let* ((query (save-excursion
                   (when next-line-p (forward-line -1) (end-of-line))
-                  (git-complete--trim-spaces
-                   (buffer-substring (or omni-from (point-at-bol)) (point)) nil)))
+                  (git-complete--normalize-query
+                   (buffer-substring (or omni-from (point-at-bol)) (point)))))
          (candidates (when (string-match "\\_>" query) ; at least one symbol required
                        (git-complete--get-grep-result query next-line-p)))
          (whole-line (when (or next-line-p (null omni-from))
