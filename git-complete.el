@@ -202,16 +202,14 @@ result."
 
 (defun git-complete--normalize-candidate (str &optional no-leading-whitespaces)
   "Remove all trailing spaces from STR. If STR ends with a
-  newline character, then delete all spaces at the eol. If STR
-  has more than one leading whitespaces, remove them except for
-  one. If NO-LEADING-WHITESPACES, all leading spaces are deleted
-  instead."
+  newline character, then delete all spaces at the eol. If
+  NO-LEADING-WHITESPACES is non-nil, leading spaces are removed
+  too. Then replace all consecutive spaces with single space
+  character. "
   (with-temp-buffer
-    (save-excursion (insert str))
-    (when (and (> (skip-chars-forward "\s\t") 0)
-               (not no-leading-whitespaces))
-      (forward-char -1))
-    (delete-region (point-min) (point))
+    (save-excursion (insert (replace-regexp-in-string "[\s\t]+" " " str)))
+    (when (and no-leading-whitespaces (> (skip-chars-forward "\s\t") 0))
+      (delete-region (point) (point-min)))
     (end-of-line)
     (skip-chars-backward "\s\t")
     (delete-region (point) (point-at-eol))
