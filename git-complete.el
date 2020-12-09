@@ -98,7 +98,7 @@ next-line completion"
   :type 'number
   :group 'git-complete)
 
-(defcustom git-complete-candidate-limit 1000
+(defcustom git-complete-candidate-limit 100000
   "Maximum number of grep result. If more lines are found by
   grep, stop completion."
   :type 'number
