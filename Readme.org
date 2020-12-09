@@ -150,22 +150,18 @@ See "How it works" section for the options below:
 
 ** How it works
 
-There are two methods to collect completions:
+There are three methods to collect completions:
 
-- current-line completion
-- next-line completion
-
-and each completions are classified into two types:
-
-- whole-line completion
-- omni completion
+- whole current-line completion
+- omni current-line completion
+- omni next-line completion
 
 User is prompted to select one of the completions, and the selected
 completion is inserted to the buffer in different ways according to
 its type.
 
 *** Completion collection
-**** Current-line completion
+**** Whole current-line completion
 
 example:
 
@@ -200,7 +196,32 @@ example:
    : | import React from 'react';\n                    |       30% | whole-line |
    : | ...                                             |       ... |        ... |
 
-3. Trim each lines found in 1. as follows:
+**** Omni current-line completion
+
+example:
+
+: React|            * consider | as the cursor
+
+1. Collect lines with "React" in your git repo, by =git grep=-ing with
+   "React"
+
+   : $ git grep -F -h "React"
+   : import React from 'react';
+   : export default class extends React.Component {
+   : export default class extends React.Component {
+   : import React from 'react';
+   : export default class extends React.Component {
+   : import React from 'react';
+   : import ReactDOM from 'react-dom';
+   : export default class extends React.Component {
+   :     ReactDOM.render(<MyComponent />);
+   : import React from 'react';
+   : export default class extends React.Component {
+   : import ReactDOM from 'react-dom';
+   :     ReactDOM.render(<AnotherComponent />);
+   : ...
+
+2. Trim each lines found in 1. as follows:
 
    - Find the query string ("React" in this case) inside the line and
      remove characters before the query and the query itself.
@@ -223,25 +244,23 @@ example:
    : DOM.render(<AnotherComponent />);
    : ...
 
-4. If some identical idioms appear "frequently" (as defined in
+3. If some identical idioms appear "frequently" (as defined in
    =git-complete-threshold=) at the beginning of the lines, add the
    idioms to the completions list as "omni" completions.
 
-   : |                                                  | frequency | type       |
-   : +--------------------------------------------------+-----------+------------|
-   : | export default class extends React.Component {\n |       60% | whole-line |
-   : | import React from 'react';\n                     |       30% | whole-line |
-   : | .Component {\n                                   |       60% |       omni |
-   : | from 'react';\n                                  |       30% |       omni |
-   : | DOM from 'react-dom';\n                          |        5% |       omni |
-   : | DOM.render(<                                     |        5% |       omni |
-   : | ...                                              |       ... |        ... |
+   : |                         | frequency | type |
+   : +-------------------------+-----------+------|
+   : | .Component {\n          |       60% | omni |
+   : | from 'react';\n         |       30% | omni |
+   : | DOM from 'react-dom';\n |        5% | omni |
+   : | DOM.render(<            |        5% | omni |
+   : | ...                     |       ... |  ... |
 
    Note that =DOM.render(<= is added to the list but
    =DOM.render(<MyComponent />)= is not, since it does not appear
    "frequently".
 
-5. If no completions are found, shorten the query by one subword
+4. If no completions are found, shorten the query by one subword
    (configurable via =git-cmopletion-omni-completion-type=) from the
    beginning and =git grep= again, then back to the step 3. .
 
@@ -257,7 +276,7 @@ example:
    When the query is shortened, all completions will be type of
    "omni", since the step 2. is skipped.
 
-**** Next-line completion
+**** Omni next-line completion
 
 example:
 
@@ -285,17 +304,18 @@ example:
    : --
    : ...
 
-2. Find "whole-line" matches as like the step 2. of "Current-line
+2. Find identical lines as like the step 2. of "Whole current-line
    completion", according to
    =git-complete-next-line-completion-threshold=
 
-   : |                         | frequency | type       |
-   : +-------------------------+-----------+------------|
-   : | use warnings;\n         |       80% | whole-line |
-   : | use utf8;\n             |       20% | whole-line |
-   : | ...                     |       ... |        ... |
+   : |                 | frequency | type |
+   : +-----------------+-----------+------|
+   : | use warnings;\n |       80% | omni |
+   : | use utf8;\n     |       20% | omni |
+   : | ...             |       ... |  ... |
 
-Next-line completion does not give any "omni" completions.
+3. If no completions are found, shorten the query and repeat like the
+   step 3 of "Omni current-line completion".
 
 *** Completion insertion
 **** Whole-line completion
@@ -306,7 +326,7 @@ example:
 
 when you select a "whole-line" completion like below:
 
-: export default class extends React.Component {
+: export default class extends React.Component {\n
 
 then
 
@@ -314,7 +334,7 @@ then
 
    : |
 
-2. Insert the completion followed by newline and indentation
+2. Insert the completion
 
    : export default class extends React.Component {
    :     |
@@ -337,7 +357,7 @@ when you select a "omni" completion like below:
 
 then
 
-1. Just insert the completion
+1. Insert the completion after the cursor
 
    : var foo = moment().format("YYYY-MM-DD HH:mm:ss",|
 
@@ -345,104 +365,3 @@ then
    disabled) after the cursor
 
    : var foo = moment().format("YYYY-MM-DD HH:mm:ss",|)
-
-** "autopair" feature
-
-When =git-grep-enable-autopair= is non-nil, git-complete always try to
-keep the parentheses balanced during completion.
-
-*** Whole-line (Next-line) completion
-
-- Open paren
-
-  If the completion being inserted has more *open* parens than close
-  parens:
-
-  : query:
-  : validate|            * consider | as the cursor
-
-  : completion:
-  : my %params = Params::Validate::validate(@_, {
-
-  then close parens (and an empty line) are inserted automatically.
-
-  : result:
-  : my %params = Params::Validate::validate(@_, {
-  :     |
-  : })
-
-- Close paren
-
-  If the completion being inserted has more *close* parens than open
-  parens:
-
-  : query:
-  : my_awesome_function(
-  :   |
-  : )
-
-  : completion:
-  : an_awesome_argument)
-
-  then the close parens in the next line is mereged into the
-  replacement :
-
-  : result:
-  : my_awesome_function(
-  :   an_awesome_argument)
-  : |
-
-  If no such close paren exist in the next line, then open parens are
-  inserted at the beginning of the replacement, instead.
-
-  : query:
-  : my_awesome_function(
-  :   |
-  :   another_awesome_argument
-  : );
-
-  : result:
-  : my_awesome_function(
-  :   (an_awesome_argument)
-  :   |
-  :   foo
-  : );
-
-  (I'm not sure this behavior is very useful ... but this actually
-  keeps the balance. maybe improved in the future versions ... ?)
-
-*** "omni" completion
-
-- Open paren
-
-  If the completion being inserted has more *open* parens than close
-  parens:
-
-  : query:
-  : var formatted = moment.format|
-
-  : completion:
-  : ("YYYY-MM-DD HH:mm:ss",
-
-  then close parens are inserted automatically (without an empty line,
-  unlike whole-line completion).
-
-  : result:
-  : var formatted = moment.format("YYYY-MM-DD HH:mm:ss",|)
-
-- Close paren
-
-  If the completion being inserted has more *close* parens than open
-  parens:
-
-  : query:
-  : var foo = my_awesome_function(|)
-
-  : completion:
-  : an_awesome_argument), bra, bra, bra
-
-  then the close paren and characters outside the paren (=bra, bra,
-  bra=) are simply dropped from the completion:
-
-  : result:
-  : var foo = my_awesome_function(an_awesome_argument|)
