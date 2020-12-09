@@ -510,9 +510,6 @@ string."
           (git-complete--collect-omni-candidates
            (git-complete--shorten-query query) next-line-p no-leading-whitespaces)))))
 
-;; newline を入れるべきかどうかは、 whole-line かどうかの問題ではない
-;; よなあ
-
 (defun git-complete--drop-newline (str)
   "If STR ends with a newline character, then drop the newline
   character and return (STR . t). Otherwise just return (STR
