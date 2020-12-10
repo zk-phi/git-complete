@@ -165,6 +165,16 @@ candidate."
   :type 'boolean
   :group 'git-complete)
 
+(defcustom git-complete-bol-indicator ""
+  "String to indicate beginning-of-lines in the tooltip."
+  :type 'string
+  :group 'git-complete)
+
+(defcustom git-complete-eol-indicator ""
+  "String to indicate end-of-lines in the tooltip."
+  :type 'string
+  :group 'git-complete)
+
 (defcustom git-complete-grep-function 'git-complete-git-grep
   "Function used to grep over the git repo. You may assume that
 the function is called with `default-directory' set to the
@@ -566,8 +576,19 @@ string."
                 'git-complete--drop-newline
                 (git-complete--collect-omni-candidates query next-line-p no-leading-whitespaces)))
          (items (nconc
-                 (mapcar (lambda (e) (popup-make-item (car e) :value (cons t e))) whole-line)
-                 (mapcar (lambda (e) (popup-make-item (car e) :value (cons nil e))) omni))))
+                 (mapcar (lambda (e)
+                           (popup-make-item
+                            (concat git-complete-bol-indicator
+                                    (car e)
+                                    (if (cdr e) git-complete-eol-indicator ""))
+                            :value (cons t e)))
+                         whole-line)
+                 (mapcar (lambda (e)
+                           (popup-make-item
+                            (concat (car e)
+                                    (if (cdr e) git-complete-eol-indicator ""))
+                            :value (cons nil e)))
+                         omni))))
     (cond (items
            (cl-destructuring-bind (whole-line-p str . newline)
                (popup-menu*
