@@ -382,12 +382,12 @@ inserted."
 ;;                              ("DOM" 0)
 ;;                              ("DOM" 0) (".render" 0) ("(<Component" 1) (" />);" 0) stack
 ;; DOM.render(<Component />);   ("DOM" 0) (".render" 0) ("(<Component" 0) (" />);" 1) +inc
-;;                              ("DOM" 0) (".render" 0) ("(<Component" 1) (" />);" 1) <- reduce
+;;                              ("DOM" 0) (".render" 0) ("(<Component" 0) (" />);" 1) <- reduce
 ;;                              ("DOM" 0) (".render" 0) ("(<Component" 1) <- reduce
 ;;                              ("DOM" 0) (".render" 1) <- reduce
 ;;                              ("DOM" 0) (".render" 1) ("(<MyComponent" 1) (" />);" 0) stack
 ;; DOM.render(<MyComponent />); ("DOM" 0) (".render" 1) ("(<MyComponent" 0) (" />);" 1) +inc
-;;                              ("DOM" 0) (".render" 1) ("(<MyComponent" 1) (" />);" 1) <- reduce
+;;                              ("DOM" 0) (".render" 1) ("(<MyComponent" 0) (" />);" 1) <- reduce
 ;;                              ("DOM" 0) (".render" 1) ("(<MyComponent" 1) <- reduce
 ;;                              ("DOM" 0) (".render" 2) -> completion
 ;;                              ("DOM" 0) <- reduce
