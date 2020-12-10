@@ -408,7 +408,7 @@ arg NODE-KEY is used internally."
             ((or (string= node-key "") (not exact-only))
              (list (cons node-key (cdr trie))))))))
 
-(defun git-complete--filter-candidates (lst &optional exact-only threshold)
+(defun git-complete--filter-candidates (lst exact-only threshold)
   "Extract a sorted (by occurrences) list of \"suitable\"
 completion candidates from a string list LST. Unlessj EXACT-ONLY
 is non-nil, strings can be shortened to meet THRESHOLD."
