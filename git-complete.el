@@ -499,7 +499,9 @@ string."
       (unless (> (length candidates) git-complete-candidate-limit)
         (let ((normalized
                (cl-remove-if
-                (lambda (s) (or (string= s "") (string= s query)))
+                ;; if QUERY is substring of a candidate, the candidate
+                ;; is an omni candidate
+                (lambda (s) (or (string= s "") (string-prefix-p query s)))
                 (mapcar (lambda (s) (git-complete--normalize-candidate s t)) candidates))))
           (git-complete--filter-candidates
            (sort normalized 'string<) t git-complete-whole-line-completion-threshold))))))
