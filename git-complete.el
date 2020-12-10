@@ -442,14 +442,11 @@ string."
                               (mapconcat (lambda (ext) (concat "\"*." ext "\"")) extensions " ")
                             "*")))
          (lines (split-string (shell-command-to-string command) "^" t))
-         (count 0)
          lst)
     (while (and lines (cdr lines))
       (when nextline-p (pop lines))     ; pop the first line
       (push (pop lines) lst)
-      (when nextline-p (pop lines))     ; pop "--"
-      (when (> (setq count (1+ count)) git-complete-candidate-limit)
-        (setq lines nil lst nil)))
+      (when nextline-p (pop lines)))    ; pop "--"
     lst))
 
 (defun git-complete-ripgrep (query extensions nextline-p ignore-case-p)
@@ -461,14 +458,11 @@ string."
                             " ")
                           query))
          (lines (split-string (shell-command-to-string command) "^" t))
-         (count 0)
          lst)
     (while (and lines (cdr lines))
       (when nextline-p (pop lines))     ; pop the first line
       (push (pop lines) lst)
-      (when nextline-p (pop lines))     ; pop "--"
-      (when (> (setq count (1+ count)) git-complete-candidate-limit)
-        (setq lines nil lst nil)))
+      (when nextline-p (pop lines)))    ; pop "--"
     lst))
 
 ;; * interface
@@ -482,33 +476,38 @@ string."
 (defun git-complete--collect-whole-line-candidates (query)
   "Collect whole-line completion candidates and return as a list of string."
   (when (string-match "\\_>" query)     ; at least one symbol required
-    (let* ((candidates (git-complete--get-grep-result query nil))
-           (normalized (cl-remove-if
-                        (lambda (s) (or (string= s "") (string= s query)))
-                        (mapcar (lambda (s) (git-complete--normalize-candidate s t)) candidates))))
-      (git-complete--filter-candidates
-       normalized t git-complete-whole-line-completion-threshold))))
+    (let ((candidates (git-complete--get-grep-result query nil)))
+      (unless (> (length candidates) git-complete-candidate-limit)
+        (let ((normalized
+               (cl-remove-if
+                (lambda (s) (or (string= s "") (string= s query)))
+                (mapcar (lambda (s) (git-complete--normalize-candidate s t)) candidates))))
+          (git-complete--filter-candidates
+           normalized t git-complete-whole-line-completion-threshold))))))
 
 (defun git-complete--collect-omni-candidates (query next-line-p no-leading-whitespaces)
   "Collect omni completion candidates and return as a list of string."
   (when (string-match "\\_>" query)     ; at least one symbol required
-    (let* ((candidates (git-complete--get-grep-result query next-line-p))
-           (trimmed (if next-line-p candidates
-                      (mapcar (lambda (s) (git-complete--trim-candidate s query)) candidates)))
-           (normalized (cl-remove-if
-                        (lambda (s) (or (string= s "") (string= s "\n")))
-                        (mapcar (lambda (s)
-                                  (git-complete--normalize-candidate s no-leading-whitespaces))
-                                trimmed)))
-           (filtered (git-complete--filter-candidates
-                      normalized
-                      next-line-p
-                      (if next-line-p
-                          git-complete-next-line-completion-threshold
-                        git-complete-threshold))))
-      (or filtered
-          (git-complete--collect-omni-candidates
-           (git-complete--shorten-query query) next-line-p no-leading-whitespaces)))))
+    (let ((candidates (git-complete--get-grep-result query next-line-p)))
+      (unless (> (length candidates) git-complete-candidate-limit)
+        (let* ((trimmed
+                (if next-line-p candidates
+                  (mapcar (lambda (s) (git-complete--trim-candidate s query)) candidates)))
+               (normalized
+                (cl-remove-if
+                 (lambda (s) (or (string= s "") (string= s "\n")))
+                 (mapcar (lambda (s)
+                           (git-complete--normalize-candidate s no-leading-whitespaces))
+                         trimmed)))
+               (filtered
+                (git-complete--filter-candidates
+                 normalized next-line-p
+                 (if next-line-p
+                     git-complete-next-line-completion-threshold
+                   git-complete-threshold))))
+          (or filtered
+              (git-complete--collect-omni-candidates
+               (git-complete--shorten-query query) next-line-p no-leading-whitespaces)))))))
 
 (defun git-complete--drop-newline (str)
   "If STR ends with a newline character, then drop the newline
