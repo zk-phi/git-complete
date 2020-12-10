@@ -550,13 +550,15 @@ string."
               (git-complete--collect-omni-candidates
                (git-complete--shorten-query query) next-line-p no-leading-whitespaces)))))))
 
-(defun git-complete--drop-newline (str)
+(defun git-complete--make-popup-item (str whole-line-p)
   "If STR ends with a newline character, then drop the newline
   character and return (STR . t). Otherwise just return (STR
   . nil)."
-  (if (string-match "\n" str)
-      (cons (substring str 0 (match-beginning 0)) t)
-    (cons str nil)))
+  (let* ((bol (if whole-line-p git-complete-bol-indicator ""))
+         (newline (string-match "\n" str))
+         (str (if newline (substring str 0 (match-beginning 0)) str))
+         (dispstr (concat bol str (if newline git-complete-eol-indicator ""))))
+    (popup-make-item dispstr :value (cons whole-line-p (cons str newline)))))
 
 (defun git-complete ()
   "Complete the line at point with `git grep'."
@@ -569,27 +571,11 @@ string."
                   (buffer-substring (point-at-bol) (point))))
          (query (if (not git-complete-normalize-spaces) query
                   (git-complete--normalize-query query)))
-         (whole-line (and (not next-line-p)
-                          (mapcar
-                           'git-complete--drop-newline
-                           (git-complete--collect-whole-line-candidates query))))
-         (omni (mapcar
-                'git-complete--drop-newline
-                (git-complete--collect-omni-candidates query next-line-p no-leading-whitespaces)))
+         (whole-line (and (not next-line-p) (git-complete--collect-whole-line-candidates query)))
+         (omni (git-complete--collect-omni-candidates query next-line-p no-leading-whitespaces))
          (items (nconc
-                 (mapcar (lambda (e)
-                           (popup-make-item
-                            (concat git-complete-bol-indicator
-                                    (car e)
-                                    (if (cdr e) git-complete-eol-indicator ""))
-                            :value (cons t e)))
-                         whole-line)
-                 (mapcar (lambda (e)
-                           (popup-make-item
-                            (concat (car e)
-                                    (if (cdr e) git-complete-eol-indicator ""))
-                            :value (cons nil e)))
-                         omni))))
+                 (mapcar (lambda (e) (git-complete--make-popup-item e t)) whole-line)
+                 (mapcar (lambda (e) (git-complete--make-popup-item e nil)) omni))))
     (cond (items
            (cl-destructuring-bind (whole-line-p str . newline)
                (popup-menu*
