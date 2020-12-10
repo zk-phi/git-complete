@@ -19,7 +19,7 @@
 
 ;; Author: zk_phi
 ;; URL: http://zk-phi.github.com/
-;; Version: 0.0.7
+;; Version: 0.0.8
 ;; Package-Requires: ((popup "0.4"))
 
 ;; Load this script
@@ -49,6 +49,7 @@
 ;; 0.0.5 add option `git-complete-grep-function' and support ripgrep
 ;; 0.0.6 add option `git-complete-candidate-limit'
 ;; 0.0.7 implement better newline handling
+;; 0.0.8 performance improvements
 
 ;;; Code:
 
