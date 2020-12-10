@@ -19,7 +19,7 @@
 
 ;; Author: zk_phi
 ;; URL: http://zk-phi.github.com/
-;; Version: 0.0.9
+;; Version: 0.0.10
 ;; Package-Requires: ((popup "0.4"))
 
 ;; Load this script
@@ -51,6 +51,7 @@
 ;; 0.0.7 implement better newline handling
 ;; 0.0.8 performance improvements
 ;; 0.0.9 add option `git-complete-normalize-spaces'
+;; 0.0.10 add options `git-complete-eol/bol-indicator'
 
 ;;; Code:
 
