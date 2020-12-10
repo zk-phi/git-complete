@@ -359,62 +359,80 @@ inserted."
 
 ;; * trim and filter candidates
 
-(defun git-complete--make-hist-trie (lst-of-lst)
-  "Internal function for `git-complete--filter-candidates'. Takes
-a List[List[String]], and makes a trie-like tree, whose nodes
-are (CHILDREN . COUNT) where CHILDREN is a hash map of String ->
-Node. Last element in each List[String] is expected to be an
-empty string."
-  (let ((trie (cons (make-hash-table :test 'equal) 0)) current-node child-node)
-    (dolist (lst lst-of-lst)
-      (setq current-node trie)
-      (cl-incf (cdr current-node))
-      (dolist (elem lst)
-        (setq child-node (gethash elem (car current-node)))
-        (cond (child-node
-               (setq current-node child-node)
-               (cl-incf (cdr current-node)))
-              (t
-               (setq child-node (cons (make-hash-table :test 'equal) 1))
-               (puthash elem child-node (car current-node))
-               (setq current-node child-node)))))
-    trie))
+;; [how "git-complete--filter-candidates" works]
+;;
+;;  SORTED CANDIDATES           STACK
+;;                              <empty>
+;;                              (".Component" 0) (" {" 0) stack
+;; .Component {                 (".Component" 0) (" {" 1) +inc
+;; .Component {                 (".Component" 0) (" {" 2) +inc
+;; .Component {                 (".Component" 0) (" {" 3) +inc
+;; .Component {                 (".Component" 0) (" {" 4) +inc
+;; .Component {                 (".Component" 0) (" {" 5) +inc
+;;                              (".Component" 0) (" {" 5) -> completion
+;;                              (".Component" 0) <- reduce
+;;                              <empty>
+;;                              ("DOM" 0) (" from" 0) (" 'react-dom" 0) ("';" 0) stack
+;; DOM from 'react-dom';        ("DOM" 0) (" from" 0) (" 'react-dom" 0) ("';" 1) +inc
+;; DOM from 'react-dom';        ("DOM" 0) (" from" 0) (" 'react-dom" 0) ("';" 2) +inc
+;;                              ("DOM" 0) (" from" 0) (" 'react-dom" 0) ("';" 2) -> completion
+;;                              ("DOM" 0) (" from" 0) (" 'react-dom" 0) <- reduce
+;;                              ("DOM" 0) (" from" 0) <- reduce
+;;                              ("DOM" 0)
+;;                              ("DOM" 0) (".render" 0) ("(<Component" 1) (" />);" 0) stack
+;; DOM.render(<Component />);   ("DOM" 0) (".render" 0) ("(<Component" 0) (" />);" 1) +inc
+;;                              ("DOM" 0) (".render" 0) ("(<Component" 1) (" />);" 1) <- reduce
+;;                              ("DOM" 0) (".render" 0) ("(<Component" 1) <- reduce
+;;                              ("DOM" 0) (".render" 1) <- reduce
+;;                              ("DOM" 0) (".render" 1) ("(<MyComponent" 1) (" />);" 0) stack
+;; DOM.render(<MyComponent />); ("DOM" 0) (".render" 1) ("(<MyComponent" 0) (" />);" 1) +inc
+;;                              ("DOM" 0) (".render" 1) ("(<MyComponent" 1) (" />);" 1) <- reduce
+;;                              ("DOM" 0) (".render" 1) ("(<MyComponent" 1) <- reduce
+;;                              ("DOM" 0) (".render" 2) -> completion
+;;                              ("DOM" 0) <- reduce
+;;                              <empty>
+;;                              (" from" 0) ("'react" 0) ("';" 0) stack
+;;  from 'react';               (" from" 0) ("'react" 0) ("';" 1) +inc
+;;  from 'react';               (" from" 0) ("'react" 0) ("';" 2) +inc
+;;  from 'react';               (" from" 0) ("'react" 0) ("';" 3) +inc
+;;  from 'react';               (" from" 0) ("'react" 0) ("';" 4) +inc
+;;                              (" from" 0) ("'react" 0) ("';" 4) -> completion
+;;                              (" from" 0) ("'react" 0) <- reduce
+;;                              (" from" 0) <- reduce
+;;                              <empty>
 
-(defun git-complete--dump-trie (trie)
-  "FOR DEBUG USE."
-  (let ((res nil))
-    (maphash (lambda (k v) (push (cons k (git-complete--dump-trie v)) res)) (car trie))
-    (cons (cdr trie) res)))
-
-(defun git-complete--filter-candidates-internal (trie threshold exact-only &optional node-key)
-  "Internal recursive function for
-`git-complete--filter-candidates'. Traverse a trie returned by
-`git-complete--make-hist-trie' and finds list of \"suitable\"
-completion candidates according to THRESHOLD and EXACT-ONLY,
-returned as a list of the form ((STRING . COUNT) ...). Optional
-arg NODE-KEY is used internally."
-  (when (and trie (>= (cdr trie) threshold))
-    (let ((children
-           (apply 'nconc
-                  (git-complete--maphash
-                   (lambda (k v)
-                     (funcall 'git-complete--filter-candidates-internal v threshold exact-only k))
-                   (car trie)))))
-      (cond (children
-             (mapcar (lambda (x) (cons (if node-key (concat node-key (car x)) (car x)) (cdr x)))
-                     children))
-            ((null node-key)
-             nil)
-            ((or (string= node-key "") (not exact-only))
-             (list (cons node-key (cdr trie))))))))
-
-(defun git-complete--filter-candidates (lst exact-only threshold)
-  "Extract a sorted (by occurrences) list of \"suitable\"
-completion candidates from a string list LST. Unlessj EXACT-ONLY
-is non-nil, strings can be shortened to meet THRESHOLD."
-  (let* ((trie (git-complete--make-hist-trie (mapcar (lambda (s) (split-string s "$\\|\\_>")) lst)))
-         (threshold (* threshold (cdr trie)))
-         (filtered (git-complete--filter-candidates-internal trie threshold exact-only)))
+(defun git-complete--filter-candidates (sorted-list exact-only threshold)
+  (let* ((threshold (* threshold (length sorted-list)))
+         (stack-root (list ["" "" 0]))     ; sentinel
+         filtered
+         (reduce-stack-fn (lambda (stack)
+                            (cl-reduce
+                             (lambda (l r)
+                               (let ((count (+ (aref l 2) r)))
+                                 (if (< count threshold) count
+                                   (push (cons (aref l 1) count) filtered)
+                                   0)))
+                             stack :from-end t :initial-value 0))))
+    (dolist (item sorted-list)
+      (let ((words (if exact-only (list item) (split-string item "$\\|\\_>" t)))
+            (stack stack-root))
+        (while words
+          (when (and (cdr stack)
+                     (not (string= (car words) (aref (cadr stack) 0))))
+            ;; Stack: (("" . 0) #=("React" . 0) ("DOM" . 1)) / Split: (" from" " 'react" "';")
+            ;; -> Stack: (("" . 0) #=("React" . 1)) / Split: (" from" " 'react" "';")
+            (cl-incf (aref (car stack) 2) (funcall reduce-stack-fn (cdr stack)))
+            (setcdr stack nil))
+          (when (null (cdr stack))
+            ;; Stack: (("" . 0) #=("React" . 1)) / Split: (" from" " 'react" "';")
+            ;; -> Stack: (("" . 0) #=("React" . 1) (" from" . 1)) / Split: (" from" " 'react" "';")
+            (let ((prefix (aref (car stack) 1)))
+              (setcdr stack (list (vector (car words) (concat prefix (car words)) 0)))))
+          ;; Stack: (("" . 0) #=("React" . 1) (" from" . 1)) / Split: (" from" " 'react" "';")
+          ;; -> Stack: (("" . 0) ("React" . 1) #=(" from" . 1)) / Split: (" 'react" "';")
+          (setq stack (cdr stack) words (cdr words)))
+        (cl-incf (aref (car stack) 2))))
+    (funcall reduce-stack-fn (cdr stack-root))
     (mapcar 'car (sort filtered (lambda (a b) (> (cdr a) (cdr b)))))))
 
 ;; * grep
@@ -483,7 +501,7 @@ string."
                 (lambda (s) (or (string= s "") (string= s query)))
                 (mapcar (lambda (s) (git-complete--normalize-candidate s t)) candidates))))
           (git-complete--filter-candidates
-           normalized t git-complete-whole-line-completion-threshold))))))
+           (sort normalized 'string<) t git-complete-whole-line-completion-threshold))))))
 
 (defun git-complete--collect-omni-candidates (query next-line-p no-leading-whitespaces)
   "Collect omni completion candidates and return as a list of string."
@@ -501,7 +519,7 @@ string."
                          trimmed)))
                (filtered
                 (git-complete--filter-candidates
-                 normalized next-line-p
+                 (sort normalized 'string<) next-line-p
                  (if next-line-p
                      git-complete-next-line-completion-threshold
                    git-complete-threshold))))
