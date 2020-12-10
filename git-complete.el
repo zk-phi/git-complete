@@ -99,6 +99,13 @@ next-line completion"
   :type 'number
   :group 'git-complete)
 
+(defcustom git-complete-normalize-spaces t
+  "When non-nil, git-complete do not distinguish two or more
+  consecutive spaces and a single space, when extracting
+  candidates."
+  :type 'boolean
+  :group 'git-complete)
+
 (defcustom git-complete-candidate-limit 100000
   "Maximum number of grep result. If more lines are found by
   grep, stop completion."
@@ -358,9 +365,9 @@ inserted."
       (funcall indent-line-function)
       (back-to-indentation))))
 
-;; * trim and filter candidates
+;; * extract candidates
 
-;; [how "git-complete--filter-candidates" works]
+;; [how "git-complete--extract-candidates" works]
 ;;
 ;;  SORTED CANDIDATES           STACK
 ;;                              <empty>
@@ -402,16 +409,16 @@ inserted."
 ;;                              (" from" 0) <- reduce
 ;;                              <empty>
 
-(defun git-complete--filter-candidates (sorted-list exact-only threshold)
+(defun git-complete--extract-candidates (sorted-list exact-only threshold)
   (let* ((threshold (* threshold (length sorted-list)))
          (stack-root (list ["" "" 0]))     ; sentinel
-         filtered
+         extracted
          (reduce-stack-fn (lambda (stack)
                             (cl-reduce
                              (lambda (l r)
                                (let ((count (+ (aref l 2) r)))
                                  (if (< count threshold) count
-                                   (push (cons (aref l 1) count) filtered)
+                                   (push (cons (aref l 1) count) extracted)
                                    0)))
                              stack :from-end t :initial-value 0))))
     (dolist (item sorted-list)
@@ -434,7 +441,7 @@ inserted."
           (setq stack (cdr stack) words (cdr words)))
         (cl-incf (aref (car stack) 2))))
     (funcall reduce-stack-fn (cdr stack-root))
-    (mapcar 'car (sort filtered (lambda (a b) (> (cdr a) (cdr b)))))))
+    (mapcar 'car (sort extracted (lambda (a b) (> (cdr a) (cdr b)))))))
 
 ;; * grep
 
@@ -498,12 +505,13 @@ string."
     (let ((candidates (git-complete--get-grep-result query nil)))
       (unless (> (length candidates) git-complete-candidate-limit)
         (let ((normalized
-               (cl-remove-if
-                ;; if QUERY is substring of a candidate, the candidate
-                ;; is an omni candidate
-                (lambda (s) (or (string= s "") (string-prefix-p query s)))
-                (mapcar (lambda (s) (git-complete--normalize-candidate s t)) candidates))))
-          (git-complete--filter-candidates
+               (if (not git-complete-normalize-spaces) candidates
+                 (cl-remove-if
+                  ;; if QUERY is substring of a candidate, the candidate
+                  ;; is an omni candidate
+                  (lambda (s) (or (string= s "") (string-prefix-p query s)))
+                  (mapcar (lambda (s) (git-complete--normalize-candidate s t)) candidates)))))
+          (git-complete--extract-candidates
            (sort normalized 'string<) t git-complete-whole-line-completion-threshold))))))
 
 (defun git-complete--collect-omni-candidates (query next-line-p no-leading-whitespaces)
@@ -515,18 +523,18 @@ string."
                 (if next-line-p candidates
                   (mapcar (lambda (s) (git-complete--trim-candidate s query)) candidates)))
                (normalized
-                (cl-remove-if
-                 (lambda (s) (or (string= s "") (string= s "\n")))
-                 (mapcar (lambda (s)
-                           (git-complete--normalize-candidate s no-leading-whitespaces))
-                         trimmed)))
+                (if (not git-complete-normalize-spaces) trimmed
+                  (mapcar (lambda (s) (git-complete--normalize-candidate s no-leading-whitespaces))
+                          trimmed)))
                (filtered
-                (git-complete--filter-candidates
-                 (sort normalized 'string<) next-line-p
+                (cl-remove-if (lambda (s) (or (string= s "") (string= s "\n"))) normalized))
+               (extracted
+                (git-complete--extract-candidates
+                 (sort filtered 'string<) next-line-p
                  (if next-line-p
                      git-complete-next-line-completion-threshold
                    git-complete-threshold))))
-          (or filtered
+          (or extracted
               (git-complete--collect-omni-candidates
                (git-complete--shorten-query query) next-line-p no-leading-whitespaces)))))))
 
@@ -546,7 +554,9 @@ string."
          (no-leading-whitespaces (looking-back "[\s\t]" bol))
          (query (save-excursion
                   (when next-line-p (forward-line -1) (end-of-line))
-                  (git-complete--normalize-query (buffer-substring (point-at-bol) (point)))))
+                  (buffer-substring (point-at-bol) (point))))
+         (query (if (not git-complete-normalize-spaces) query
+                  (git-complete--normalize-query query)))
          (whole-line (and (not next-line-p)
                           (mapcar
                            'git-complete--drop-newline
