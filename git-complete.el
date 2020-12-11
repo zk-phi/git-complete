@@ -63,10 +63,11 @@
   :group 'git-complete)
 
 (defcustom git-complete-enable-autopair t
-  "When non-nil, `git-complete' assumes that the parens are
-always balanced, and keep the balance on
-completion (i.e. automatically insert close parens together with
-open parens, and avoid inserting extra close parens)."
+  "When non-nil, `git-complete' tries to keep the parens balanced
+during completion (i.e. automatically insert close parens
+together with open parens, avoid inserting extra close parens,
+and do not invoke whole-line completion when the current line has
+more open/close parens than close/open parens)."
   :type 'boolean
   :group 'git-complete)
 
@@ -210,22 +211,24 @@ result."
       (delete-region (1+ (point)) (point-max)))
     (buffer-string)))
 
-(defun git-complete--trim-candidate (str query)
-  "Search OMNI-QUERY inside STR, and remove characters before the
-   query and the query itself (if no matches are found, return an
-   empty string). If STR has more close parens than open parens,
-   then remove all characters after the last matching close
-   paren."
+(defun git-complete--trim-candidate (str &optional query lim-paren)
+  "If QUERY is specified, search QUERY inside STR, and remove
+   characters before the query and the query itself (if no
+   matches are found, return an empty string). If LIM-PAREN is
+   non-nil and STR has more close parens than open parens, then
+   remove all characters after the last matching close paren."
   (with-temp-buffer
     (save-excursion (insert str))
-    (or (search-forward query nil t)
-        (goto-char (point-max)))
-    (delete-region (point-min) (point))
-    (ignore-errors
-      (git-complete--up-list-unsafe)
-      (forward-char -1)
-      (skip-chars-backward "\s\t")
-      (delete-region (point) (point-max)))
+    (when query
+      (or (search-forward query nil t)
+          (goto-char (point-max)))
+      (delete-region (point-min) (point)))
+    (when lim-paren
+      (ignore-errors
+        (git-complete--up-list-unsafe)
+        (forward-char -1)
+        (skip-chars-backward "\s\t")
+        (delete-region (point) (point-max))))
     (buffer-string)))
 
 (defun git-complete--normalize-candidate (str &optional no-leading-whitespaces)
@@ -279,105 +282,29 @@ return an empty string."
 ;; * smart string substitution
 
 (defun git-complete--parse-parens (str)
-  "Internal function for `git-complete--replace-substring'. Parse
-str and returns unbalanced parens in the form (((EXTRA_OPEN
-. EXEPECTED_CLOSE) ...) . ((EXTRA_CLOSE . EXPECTED_OPEN) ...)).
-
-Example:
-- ()    => (nil . nil) since parens are balanced
-- f(o)o => (nil . nil) non-paren characters does not affects the result
-- [     => (((?\[ . ?\])) . nil) since we have an extra \"[\"
-- [}    => (((?\[ . ?\])) . ((?\} . ?\{))) since we have another extra \"}\""
-  (let (opens closes syntax char)
-    (with-temp-buffer
-      (save-excursion (insert str))
-      (while (progn (skip-syntax-forward "^\\\\()") (not (eobp)))
-        (setq char   (char-after)
-              syntax (aref (syntax-table) char)) ; (CLASS . PARTNER)
-        (cl-case (car syntax)
-          ((4)                          ; (string-to-syntax "(")
-           (push (cons char (cdr syntax)) opens))
-          ((5)                          ; (string-to-syntax ")")
-           (if (and opens (= (cdar opens) char))
-               (pop opens)
-             (push (cons char (cdr syntax)) closes)))
-          ((9)                          ; (string-to-syntax "\\")
-           (forward-char 1)))
-        (forward-char 1)))
-    (cons opens closes)))
-
-(defun git-complete--diff-parens (lst1 lst2)
-  "Internal function for
-`git-complete--replace-substring'. Compute difference of two
-results of `git-complete--parse-parens'.
-
-Example:
-- (git-complete--diff-parens
-   (git-complete--parse-parens \"(\")
-   (git-complete--parse-parens \"}\")) => (nil . ((?\} . ?\{) (?\) . ?\()))
-When replacing \"(\" with \"}\", we need an extra \"{\" and a
-\"(\", to keep the balance."
-  (let ((existing-opens (car lst1))
-        (added-opens (car lst2))
-        (existing-closes (cdr lst1))
-        (added-closes (cdr lst2))
-        deleted-opens deleted-closes)
-    ;; open parens
-    (while (and existing-opens added-opens)
-      (if (= (caar existing-opens) (caar added-opens))
-          (progn (pop existing-opens) (pop added-opens))
-        (push (pop existing-opens) deleted-opens)))
-    (when existing-opens
-      (setq deleted-opens (nconc (nreverse existing-opens) deleted-opens)))
-    ;; close parens
-    (while (and existing-closes added-closes)
-      (if (= (caar existing-closes) (caar added-closes))
-          (progn (pop existing-closes) (pop added-closes))
-        (push (pop existing-closes) deleted-closes)))
-    (when existing-closes
-      (setq deleted-closes (nconc (nreverse existing-closes) deleted-closes)))
-    ;; result
-    (cons (nconc (mapcar (lambda (a) (cons (cdr a) (car a))) deleted-closes) added-opens)
-          (nreverse (nconc (mapcar (lambda (a) (cons (cdr a) (car a))) deleted-opens) added-closes)))))
-
-(defun git-complete--replace-substring (from to replacement &optional no-newline)
-  "Replace region between FROM TO with REPLACEMENT and move the
-point just after the inserted text. Unlike `replace-string', this
-function tries to keep parenthesis balanced and indent the
-inserted text (the behavior may disabled via customize
-options). When NO-NEWLINE is specified, extra newlines are not
-inserted."
-  (let ((deleted (buffer-substring from to)) end)
-    (delete-region from to)
-    (setq from (goto-char from))
-    (insert replacement)
-    (save-excursion
-      (let (skip-newline)
-        (when git-complete-enable-autopair
-          (let* ((res (git-complete--diff-parens
-                       (git-complete--parse-parens deleted)
-                       (git-complete--parse-parens replacement)))
-                 (expected (car res))
-                 (extra (cdr res)))
-            (when expected
-              (insert (if no-newline "" "\n")
-                      (if (or no-newline (memq major-mode git-complete-lispy-modes)) "" "\n")
-                      (apply 'string (mapcar 'cdr expected)))
-              (setq skip-newline t))
-            (while extra
-              (if (looking-at (concat "[\s\t\n]*" (char-to-string (caar extra))))
-                  (replace-match "")
-                (save-excursion (goto-char from) (insert (char-to-string (cdar extra)))))
-              (pop extra))))
-        (unless (or no-newline skip-newline) (insert "\n")))
-      (setq end (point)))
-    (indent-region from end)
-    (unless no-newline
-      (forward-line 1)
-      (funcall indent-line-function)
-      (back-to-indentation))))
-
-;; * extract candidates
+  "Parse parens in STR and returns either t, nil or a list. If
+this function returns nil, parens in STR are balanced. If this
+function returns a list, STR has some unmatched open parens and
+it is a list of close parens required to restore the balance. If
+this function returns t, STR has some unmatched close parens."
+  (with-temp-buffer
+    (save-excursion (insert str))
+    (catch 'return
+      (let (stack)
+        (while (progn (skip-syntax-forward "^\\\\()") (not (eobp)))
+          (let* ((char (char-after))
+                 (syntax (aref (syntax-table) char)))
+            (cl-case (car syntax)
+              ((4)                      ; open paren
+               (push (cdr syntax) stack))
+              ((5)                      ; close paren
+               (if (and stack (= (car stack) char))
+                   (pop stack)
+                 (throw 'return t)))
+              ((9)                      ; escape
+               (forward-char 1))))
+          (forward-char 1))
+        stack))))
 
 ;; [how "git-complete--extract-candidates" works]
 ;;
@@ -513,18 +440,24 @@ string."
 
 (defun git-complete--collect-whole-line-candidates (query)
   "Collect whole-line completion candidates and return as a list of string."
-  (when (string-match "\\_>" query)     ; at least one symbol required
+  (when (and (string-match "\\_>" query) ; at least one symbol required
+             (or (not git-complete-enable-autopair)
+                 (eq (git-complete--parse-parens query) nil)))
     (let ((candidates (git-complete--get-grep-result query nil)))
       (unless (> (length candidates) git-complete-candidate-limit)
-        (let ((normalized
-               (if (not git-complete-normalize-spaces) candidates
-                 (cl-remove-if
-                  ;; if QUERY is substring of a candidate, the candidate
-                  ;; is an omni candidate
-                  (lambda (s) (or (string= s "") (string-prefix-p query s)))
-                  (mapcar (lambda (s) (git-complete--normalize-candidate s t)) candidates)))))
+        (let* ((trimmed
+                (if (not git-complete-enable-autopair) candidates
+                  (mapcar (lambda (s) (git-complete--trim-candidate s nil t)) candidates)))
+               (normalized
+                (if (not git-complete-normalize-spaces) trimmed
+                  (mapcar (lambda (s) (git-complete--normalize-candidate s t)) candidates)))
+               (filtered
+                (cl-remove-if
+                 ;; if QUERY is substring of a candidate, the candidate
+                 ;; is an omni candidate
+                 (lambda (s) (or (string= s "") (string-prefix-p query s))) normalized)))
           (git-complete--extract-candidates
-           (sort normalized 'string<) t git-complete-whole-line-completion-threshold))))))
+           (sort filtered 'string<) t git-complete-whole-line-completion-threshold))))))
 
 (defun git-complete--collect-omni-candidates (query next-line-p no-leading-whitespaces)
   "Collect omni completion candidates and return as a list of string."
@@ -532,8 +465,10 @@ string."
     (let ((candidates (git-complete--get-grep-result query next-line-p)))
       (unless (> (length candidates) git-complete-candidate-limit)
         (let* ((trimmed
-                (if next-line-p candidates
-                  (mapcar (lambda (s) (git-complete--trim-candidate s query)) candidates)))
+                (mapcar (lambda (s)
+                          (git-complete--trim-candidate
+                           s (and (not next-line-p) query) git-complete-enable-autopair))
+                        candidates))
                (normalized
                 (if (not git-complete-normalize-spaces) trimmed
                   (mapcar (lambda (s) (git-complete--normalize-candidate s no-leading-whitespaces))
@@ -560,6 +495,14 @@ string."
          (dispstr (concat bol str (if newline git-complete-eol-indicator ""))))
     (popup-make-item dispstr :value (cons whole-line-p (cons str newline)))))
 
+(defun git-complete--insert-close-paren-if-needed (str newline)
+  (let ((close-parens (git-complete--parse-parens str))
+        (beg (point)))
+    (when (consp close-parens)
+      (insert (if (and newline (not (memq major-mode git-complete-lispy-modes))) "\n" "")
+              (apply 'string close-parens))
+      (indent-region beg (point)))))
+
 (defun git-complete ()
   "Complete the line at point with `git grep'."
   (interactive)
@@ -583,8 +526,17 @@ string."
                 :scroll-bar t
                 :isearch git-complete-enable-isearch
                 :keymap git-complete--popup-menu-keymap)
-             (git-complete--replace-substring
-              (if whole-line-p (point-at-bol) (point)) (point) str (not newline))
+             (when whole-line-p
+               (delete-region (point-at-bol) (point)))
+             (when git-complete-normalize-spaces
+               (funcall indent-line-function))
+             (insert str)
+             (when newline
+               (insert "\n")
+               (funcall indent-line-function))
+             (when git-complete-enable-autopair
+               (save-excursion
+                 (git-complete--insert-close-paren-if-needed str newline)))
              (when (if (eq git-complete-repeat-completion 'newline)
                        (looking-back "^[\s\t]*" (point-at-bol))
                      git-complete-repeat-completion)
