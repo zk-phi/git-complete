@@ -409,7 +409,7 @@ string."
                             "*")))
          (lines (split-string (shell-command-to-string command) "^" t))
          lst)
-    (while (and lines (cdr lines))
+    (while (and lines (or (not nextline-p) (cdr lines)))
       (when nextline-p (pop lines))     ; pop the first line
       (push (pop lines) lst)
       (when nextline-p (pop lines)))    ; pop "--"
@@ -425,7 +425,7 @@ string."
                           query))
          (lines (split-string (shell-command-to-string command) "^" t))
          lst)
-    (while (and lines (cdr lines))
+    (while (and lines (or (not nextline-p) (cdr lines)))
       (when nextline-p (pop lines))     ; pop the first line
       (push (pop lines) lst)
       (when nextline-p (pop lines)))    ; pop "--"
